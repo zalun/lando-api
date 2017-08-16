@@ -2,8 +2,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import json
-
 import logging
+import os
 import pytest
 import requests_mock
 
@@ -16,7 +16,6 @@ def docker_env_vars(monkeypatch):
     """Monkeypatch environment variables that we'd get running under docker."""
     monkeypatch.setenv('PHABRICATOR_URL', 'http://phabricator.test')
     monkeypatch.setenv('TRANSPLANT_URL', 'http://autoland.test')
-    monkeypatch.setenv('DATABASE_URL', 'sqlite://')
     monkeypatch.setenv('TRANSPLANT_API_KEY', 'someapikey')
     monkeypatch.setenv('PINGBACK_ENABLED', 'y')
     monkeypatch.setenv('PINGBACK_HOST_URL', 'http://lando-api.test')
@@ -81,5 +80,10 @@ def disable_log_output():
 @pytest.fixture
 def app(versionfile, docker_env_vars, disable_migrations, disable_log_output):
     """Needed for pytest-flask."""
-    app = create_app(versionfile.strpath)
+    app = create_app(
+        version_path=versionfile.strpath,
+        database_url='sqlite://',
+        sentry_dsn=os.getenv('SENTRY_DSN', None),
+        sentry_env=os.getenv('ENV', None)
+    )
     return app.app

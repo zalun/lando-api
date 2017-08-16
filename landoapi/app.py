@@ -18,7 +18,7 @@ from mozlogging import MozLogFormatter
 logger = logging.getLogger(__name__)
 
 
-def create_app(version_path):
+def create_app(version_path, database_url, sentry_dsn, sentry_env):
     """Construct an application instance."""
     initialize_logging()
 
@@ -34,13 +34,13 @@ def create_app(version_path):
     version_info = json.load(open(version_path))
     logger.info(version_info, 'app.version')
 
+    flask_app.config['SENTRY_LOG_ENVIRONMENT_AS'] = sentry_env
+    flask_app.config['SENTRY_DSN'] = sentry_dsn
     this_app_version = version_info['version']
     initialize_sentry(flask_app, this_app_version)
 
-    db_uri = flask_app.config.setdefault(
-        'SQLALCHEMY_DATABASE_URI', os.environ.get('DATABASE_URL', 'sqlite://')
-    )
-    log_config_change('SQLALCHEMY_DATABASE_URI', db_uri)
+    flask_app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+    log_config_change('SQLALCHEMY_DATABASE_URI', database_url)
 
     flask_app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     flask_app.config['ALEMBIC'] = {'script_location': '/migrations/'}
@@ -68,7 +68,7 @@ def initialize_sentry(flask_app, release):
             a git sha).  Will be used as the Sentry "release" identifier. See
             the Sentry client configuration docs for details.
     """
-    sentry_dsn = os.environ.get('SENTRY_DSN', None)
+    sentry_dsn = flask_app.config['SENTRY_DSN']
     if sentry_dsn:
         log_config_change('SENTRY_DSN', sentry_dsn)
     else:
@@ -84,7 +84,7 @@ def initialize_sentry(flask_app, release):
     sentry.client.release = release
     log_config_change('SENTRY_LOG_RELEASE_AS', release)
 
-    environment = os.environ.get('ENV', None)
+    environment = flask_app.config['SENTRY_LOG_ENVIRONMENT_AS']
     sentry.client.environment = environment
     log_config_change('SENTRY_LOG_ENVIRONMENT_AS', environment)
 
@@ -121,14 +121,17 @@ def initialize_logging():
 @click.option(
     '--version-path', envvar='VERSION_PATH', default='/app/version.json'
 )
-def development_server(debug, port, version_path):
+@click.option('--db', envvar='DATABASE_URL', default='sqlite://')
+@click.option('--sentry_dsn', envvar='SENTRY_DSN', default=None)
+@click.option('--sentry_env', envvar='ENV', default=None)
+def development_server(debug, port, version_path, db, sentry_dsn):
     """Run the development server.
 
     This server should not be used for production deployments. Instead
     the application should be served by an external webserver as a wsgi
     app.
     """
-    app = create_app(version_path)
+    app = create_app(version_path, db, sentry_dsn, sentry_env)
     app.run(debug=debug, port=port, host='0.0.0.0')
 
 
