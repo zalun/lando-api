@@ -30,6 +30,7 @@ def test_landing_revision_saves_data_in_db(
 
     phabfactory.user()
     phabfactory.revision()
+    phabfactory.rawdiff(diff_id)
     transfactory.create_autoland_response(land_request_id)
 
     response = client.post(
@@ -110,6 +111,23 @@ def test_land_nonexisting_revision_returns_404(db, client, phabfactory, s3):
     assert response.status_code == 404
     assert response.content_type == 'application/problem+json'
     assert response.json == CANNED_LANDO_REVISION_NOT_FOUND
+
+
+def test_land_nonexisting_diff_returns_404(db, client, phabfactory, s3):
+    phabfactory.user()
+    phabfactory.revision()
+    phabfactory.rawdiff(1)
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D1',
+            'diff_id': 9000
+        }),
+        content_type='application/json'
+    )
+    assert response.status_code == 404
+    assert response.content_type == 'application/problem+json'
+    assert response.json == CANNED_LANDO_DIFF_NOT_FOUND
 
 
 def test_get_jobs(db, client):
