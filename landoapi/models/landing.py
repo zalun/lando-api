@@ -3,6 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 
+from datetime import datetime
 from flask import current_app
 
 from landoapi.models.patch import Patch
@@ -36,16 +37,22 @@ class Landing(db.Model):
         status: Status of the landing. Modified by `update` API
         error: Text describing the error if not landed
         result: Revision (sha) of push
+        created: DateTime of creation of the Landing object
+        updated: DateTime of the last save
+        patches: a list of Patch models to land
     """
     __tablename__ = "landings"
 
     id = db.Column(db.Integer, primary_key=True)
     request_id = db.Column(db.Integer, unique=True)
-    revision_id = db.Column(db.String(30))
+    revision_id = db.Column(db.Integer)
     diff_id = db.Column(db.Integer)
     status = db.Column(db.Integer)
     error = db.Column(db.String(128), default='')
-    result = db.Column(db.String(128))
+    result = db.Column(db.String(128), default='')
+    created = db.Column(db.DateTime())
+    updated = db.Column(db.DateTime())
+    patches = db.relationship('Patch', backref='landing')
 
     def __init__(
         self,
@@ -55,9 +62,12 @@ class Landing(db.Model):
         status=TRANSPLANT_JOB_PENDING
     ):
         self.request_id = request_id
+        if isinstance(revision_id, str):
+            revision_id = int(revision_id.strip().replace('D', ''))
         self.revision_id = revision_id
         self.diff_id = diff_id
         self.status = status
+        self.created = datetime.utcnow()
 
     @classmethod
     def create(cls, revision_id, diff_id, phabricator_api_key=None):
@@ -85,21 +95,24 @@ class Landing(db.Model):
             LandingNotCreatedException: landing request in Transplant failed
         """
         phab = PhabricatorClient(phabricator_api_key)
-        revision = phab.get_revision(id=revision_id)
-
-        if not revision:
-            raise RevisionNotFoundException(revision_id)
-
-        repo = phab.get_revision_repo(revision)
 
         # Save landing to make sure we've got the callback URL.
         landing = cls(revision_id=revision_id, diff_id=diff_id)
         landing.save()
 
+        # collect revisions with its eventual parents
+        revision = phab.get_revision(id=revision_id)
+        if not revision:
+            raise RevisionNotFoundException(revision_id)
+
+        # create patch for the revision
         patch = Patch(landing.id, revision, diff_id)
         patch.upload(phab)
+        patch.save()
 
-        # Define the pingback URL with the port.
+        repo = phab.get_revision_repo(revision)
+
+        # Define the pingback URL.
         callback = '{host_url}/landings/{id}/update'.format(
             host_url=current_app.config['PINGBACK_HOST_URL'], id=landing.id
         )
@@ -110,7 +123,7 @@ class Landing(db.Model):
         # FIXME: change ldap_username@example.com to the real data retrieved
         #        from Auth0 userinfo
         request_id = trans.land(
-            'ldap_username@example.com', patch.s3_url, repo['uri'], callback
+            'ldap_username@example.com', [patch.s3_url], repo['uri'], callback
         )
         if not request_id:
             raise LandingNotCreatedException
@@ -121,7 +134,7 @@ class Landing(db.Model):
 
         logger.info(
             {
-                'revision_id': revision_id,
+                'revision_id': landing.revision_id,
                 'landing_id': landing.id,
                 'msg': 'landing created for revision'
             }, 'landing.success'
@@ -130,7 +143,8 @@ class Landing(db.Model):
         return landing
 
     def save(self):
-        """Save objects in storage."""
+        """Save object to db."""
+        self.updated = datetime.utcnow()
         if not self.id:
             db.session.add(self)
 
@@ -148,7 +162,9 @@ class Landing(db.Model):
             'diff_id': self.diff_id,
             'status': self.status,
             'error_msg': self.error,
-            'result': self.result
+            'result': self.result or '',
+            'created': self.created.isoformat(),
+            'updated': self.updated.isoformat()
         }
 
 
