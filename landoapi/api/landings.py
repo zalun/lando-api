@@ -17,6 +17,7 @@ from landoapi.models.landing import (
     Landing, LandingNotCreatedException, RevisionNotFoundException,
     TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
 )
+from landoapi.models.patch import DiffNotFoundException
 
 logger = logging.getLogger(__name__)
 TRANSPLANT_API_KEY = os.getenv('TRANSPLANT_API_KEY')
@@ -36,7 +37,7 @@ def land(data, api_key=None):
         }, 'landing.invoke'
     )
     try:
-        landing = Landing.create(revision_id, api_key, diff_id)
+        landing = Landing.create(revision_id, diff_id, api_key)
     except RevisionNotFoundException:
         # We could not find a matching revision.
         logger.info(
@@ -49,6 +50,20 @@ def land(data, api_key=None):
             404,
             'Revision not found',
             'The requested revision does not exist',
+            type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404'
+        )
+    except DiffNotFoundException:
+        # We could not find a matching diff
+        logger.info(
+            {
+                'diff': diff_id,
+                'msg': 'diff not found'
+            }, 'landing.failure'
+        )
+        return problem(
+            404,
+            'Diff not found',
+            'The requested diff does not exist',
             type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404'
         )
     except LandingNotCreatedException as exc:
