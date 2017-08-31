@@ -14,8 +14,8 @@ from connexion import problem
 from flask import request
 from sqlalchemy.orm.exc import NoResultFound
 from landoapi.models.landing import (
-    Landing, LandingNotCreatedException, RevisionNotFoundException,
-    TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
+    Landing, LandingNotCreatedException, MultipleParentRevisionsDetected,
+    RevisionNotFoundException, TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
 )
 from landoapi.models.patch import DiffNotFoundException
 
@@ -65,6 +65,25 @@ def land(data, api_key=None):
             'Diff not found',
             'The requested diff does not exist',
             type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404'
+        )
+    except MultipleParentRevisionsDetected as exc:
+        # Dependency structure does not allow to automatically land
+        # the revision
+        logger.warning(
+            {
+                'revision': revision_id,
+                'error_revision_id': exc.revision_id,
+                'msg': 'Multiple revision dependency detected',
+            }, 'landing.failure'
+        )
+        return problem(
+            400,
+            'Multiple parent revisions detected',
+            'Revision {revision_id} has multiple parents. '
+            'Please proceed with manual landing process.'.format(
+                revision_id=exc.revision_id
+            ),
+            type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400'
         )
     except LandingNotCreatedException as exc:
         # We could not find a matching revision.

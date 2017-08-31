@@ -57,8 +57,8 @@ class PhabResponseFactory:
         kwargs:
             id: String ID to give the generated revision. E.g. 'D2233'.
             template: A template revision to base this on from.
-            depends_on: Response data for a Revision this revision should depend
-                on.
+            depends_on: List of response data for Revisions this revision
+                should depend on.
             active_diff: Response data for a Diff that should be this
                 Revision's "active diff" (usually this Revision's most recently
                 uploaded patch). If you manually set an active diff, it must
@@ -84,15 +84,14 @@ class PhabResponseFactory:
             revision['authorPHID'] = kwargs['author_phid']
 
         if 'depends_on' in kwargs:
-            parent_revision_response_data = kwargs['depends_on']
-            if parent_revision_response_data:
+            revision['auxiliary']['phabricator:depends-on'] = []
+            parent_list = kwargs['depends_on']
+            for parent_revision_response_data in parent_list:
                 # This Revisions depends on another Revision.
-                new_value = [phid_for_response(parent_revision_response_data)]
-            else:
-                # The user passed in None or an empty list, saying "this
-                # revision has no parent revisions."
-                new_value = []
-            revision['auxiliary']['phabricator:depends-on'] = new_value
+
+                revision['auxiliary']['phabricator:depends-on'].append(
+                    phid_for_response(parent_revision_response_data)
+                )
 
         # Revisions have at least one Diff.
         if 'active_diff' in kwargs:
@@ -149,11 +148,14 @@ class PhabResponseFactory:
         diff_phid_resp = self._replace_key(
             CANNED_DIFF_PHID_QUERY_RESULT_1, 'phid', diff_phid
         )
-        diff_phid_resp['uri'] = "{url}/differential/diff/{diff_id}/".format(
+        diff_phid_resp['result'][diff_phid][
+            'uri'
+        ] = "{url}/differential/diff/{diff_id}/".format(
             url=os.getenv('PHABRICATOR_URL'), diff_id=diff_id
         )
-        diff_phid_resp['name'] = "Diff {diff_id}".format(diff_id=diff_id)
-        diff_phid_resp['full_name'] = diff_phid_resp['name']
+        name = "Diff {diff_id}".format(diff_id=diff_id)
+        diff_phid_resp['result'][diff_phid]['name'] = name
+        diff_phid_resp['result'][diff_phid]['full_name'] = name
         self.phid(diff_phid_resp)
 
         # Create the mock raw diff endpoint.
@@ -169,7 +171,6 @@ class PhabResponseFactory:
             json=diff,
             additional_matcher=form_matcher('ids[]', str(diff_id))
         )
-
         return diff
 
     def rawdiff(self, diff_id='1', patch=None):
