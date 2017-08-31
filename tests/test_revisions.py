@@ -32,7 +32,9 @@ def test_get_revision_with_no_parents(client, phabfactory):
 def test_get_revision_with_parents(client, phabfactory):
     phabfactory.user()
     rev1 = phabfactory.revision(id='D1')
-    phabfactory.revision(id='D2', template=CANNED_REVISION_2, depends_on=rev1)
+    phabfactory.revision(
+        id='D2', template=CANNED_REVISION_2, depends_on=[rev1]
+    )
     response = client.get('/revisions/D2?api_key=api-key')
     assert response.status_code == 200
     assert response.content_type == 'application/json'

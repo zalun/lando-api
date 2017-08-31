@@ -52,6 +52,72 @@ def test_landing_revision_saves_data_in_db(
     assert landing.serialize() == CANNED_LANDING_FACTORY_1
 
 
+def test_landing_stacked_revisions(db, client, phabfactory, transfactory, s3):
+    phabfactory.user()
+    d1 = phabfactory.diff()
+    d2 = phabfactory.diff(id=2)
+    d3 = phabfactory.diff(id=3)
+    # Stacked revisions - r3 depends on r2 which depends on r1
+    # r3 -- r2 -- r1
+    r1 = phabfactory.revision(id='D1', active_diff=d1)
+    r2 = phabfactory.revision(id='D2', active_diff=d2, depends_on=[r1])
+    phabfactory.revision(id='D3', active_diff=d3, depends_on=[r2])
+    transfactory.create_autoland_response(1)
+
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D3',
+            'diff_id': 3
+        }),
+        content_type='application/json'
+    )
+
+    assert response.status_code == 202
+
+    response = client.get('/landings/1')
+    assert response.json['patch_urls'] == [
+        's3://landoapi.test.bucket/L1_D1_1.patch',
+        's3://landoapi.test.bucket/L1_D2_2.patch',
+        's3://landoapi.test.bucket/L1_D3_3.patch'
+    ]
+
+
+def test_preventing_multiple_parents(
+    db, client, phabfactory, transfactory, s3
+):
+    phabfactory.user()
+    d1 = phabfactory.diff()
+    d2 = phabfactory.diff(id=2)
+    d3 = phabfactory.diff(id=3)
+    d4 = phabfactory.diff(id=4)
+    # Multiple parents dependency can't be landed, but is allowed
+    # in Phabricator
+    #
+    # r4 -- r3 -- r1
+    #         '-- r2
+    #
+    # r4 depends on r3 which depends on r1 and r2
+    r1 = phabfactory.revision(id='D1', active_diff=d1)
+    r2 = phabfactory.revision(id='D2', active_diff=d2)
+    r3 = phabfactory.revision(id='D3', active_diff=d3, depends_on=[r1, r2])
+    phabfactory.revision(id='D4', active_diff=d4, depends_on=[r3])
+    transfactory.create_autoland_response(1)
+
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D4',
+            'diff_id': 4
+        }),
+        content_type='application/json'
+    )
+
+    assert response.status_code == 400
+    assert response.json['title'] == 'Multiple parent revisions detected'
+    assert response.json['detail'].startswith('Revision 3 has multiple')
+
+
 def test_landing_revision_calls_transplant_service(
     db, client, phabfactory, monkeypatch, s3
 ):
@@ -83,7 +149,7 @@ def test_landing_revision_calls_transplant_service(
         content_type='application/json'
     )
     tsclient().land.assert_called_once_with(
-        'ldap_username@example.com', patch_url, repo_uri,
+        'ldap_username@example.com', [patch_url], repo_uri,
         '{}/landings/1/update'.format(os.getenv('PINGBACK_HOST_URL'))
     )
     body = s3.Object('landoapi.test.bucket',

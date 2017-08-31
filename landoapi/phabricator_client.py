@@ -78,15 +78,21 @@ class PhabricatorClient:
         """
         diff_id = int(id) if id else None
         if phid:
-            phid_query_result = self._GET('/phid.query', {'phids[]': [phid]})
-            if phid_query_result:
-                diff_uri = phid_query_result[phid]['uri']
-                diff_id = self._extract_diff_id_from_uri(diff_uri)
-            else:
-                return None
+            diff_id = self.diff_phid_to_id(phid)
+
+        if not diff_id:
+            return None
 
         result = self._GET('/differential.querydiffs', {'ids[]': [diff_id]})
         return result[str(diff_id)] if result else None
+
+    def diff_phid_to_id(self, phid):
+        phid_query_result = self._GET('/phid.query', {'phids[]': [phid]})
+        if phid_query_result:
+            diff_uri = phid_query_result[phid]['uri']
+            return self._extract_diff_id_from_uri(diff_uri)
+        else:
+            return None
 
     def get_current_user(self):
         """ Gets the information of the user making this request.
