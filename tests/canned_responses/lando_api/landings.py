@@ -52,7 +52,7 @@ CANNED_LANDING_FACTORY_1 = {
     'diff_id': 2,
     'error_msg': '',
     'result': '',
-    'patch_urls': ['s3://landoapi.test.bucket/L1_D1_2.patch']
+    'patch_urls': ["s3://landoapi.test.bucket/L1_D1_2.patch"]
 }
 
 CANNED_LANDING_FACTORY_2 = {
