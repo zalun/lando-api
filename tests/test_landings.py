@@ -66,7 +66,7 @@ def test_landing_revision_calls_transplant_service(
     gitdiff = phabclient.get_rawdiff(diff_id)
     author = phabclient.get_revision_author(revision)
     hgpatch = build_patch_for_revision(gitdiff, author, revision)
-    patch_url = 's3://landoapi.test.bucket/D1_1.patch'
+    patch_url = 's3://landoapi.test.bucket/L1_D1_1.patch'
 
     # The repo we expect to see
     repo_uri = phabclient.get_revision_repo(revision)['uri']
@@ -87,7 +87,7 @@ def test_landing_revision_calls_transplant_service(
         '{}/landings/1/update'.format(os.getenv('PINGBACK_HOST_URL'))
     )
     body = s3.Object('landoapi.test.bucket',
-                     'D1_1.patch').get()['Body'].read().decode("utf-8")
+                     'L1_D1_1.patch').get()['Body'].read().decode("utf-8")
     assert body == hgpatch
 
 

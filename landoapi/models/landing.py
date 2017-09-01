@@ -67,12 +67,12 @@ class Landing(db.Model):
         if not revision:
             raise RevisionNotFoundException(revision_id)
 
-        patch = Patch(revision, diff_id, phabricator_api_key)
-
         repo = phab.get_revision_repo(revision)
 
         # Save landing to make sure we've got the callback URL.
         landing = cls(revision_id=revision_id, diff_id=diff_id).save()
+
+        patch = Patch(landing.id, revision, diff_id, phabricator_api_key)
 
         # Define the pingback URL with the port.
         callback = '{host_url}/landings/{id}/update'.format(

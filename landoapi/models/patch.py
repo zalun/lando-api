@@ -16,10 +16,13 @@ PATCH_URL_FORMAT = 's3://{bucket}/{patch_name}'
 
 
 class Patch:
-    def __init__(self, revision, diff_id, phabricator_api_key=None):
+    def __init__(
+        self, landing_id, revision, diff_id, phabricator_api_key=None
+    ):
         """Create a patch.
 
         Args:
+            landing_id: Id of the landing in Lando API
             revision: The revision as defined by Phabricator API
             diff_id: The id of the diff to be landed
             phabricator_api_key: API Key to identify in Phabricator
@@ -37,7 +40,9 @@ class Patch:
         hgpatch = build_patch_for_revision(diff, author, revision)
 
         # Upload patch to S3.
-        self.s3_url = _upload_patch_to_s3(hgpatch, revision['id'], diff_id)
+        self.s3_url = _upload_patch_to_s3(
+            hgpatch, landing_id, revision['id'], diff_id
+        )
 
         logger.info(
             {
@@ -55,27 +60,28 @@ class DiffNotFoundException(Exception):
         self.diff_id = diff_id
 
 
-def _upload_patch_to_s3(patch, revision_id, diff_id):
+def _upload_patch_to_s3(patch, landing_id, revision_id, diff_id):
     """Save patch in S3 bucket.
 
     Creates a temporary file and uploads it to an S3 bucket.
 
     Args:
         patch: Text to be saved
+        landing_id: Id of the landing in Lando API
         revision_id: String ID of the revision (ex. 'D123')
         diff_id: The integer ID of the raw diff
 
     Returns
         String representing the patch's URL in S3
-        (ex. 's3://{bucket_name}/D123_1.patch')
+        (ex. 's3://{bucket_name}/L34_D123_567.patch')
     """
     s3 = boto3.resource(
         's3',
         aws_access_key_id=current_app.config['AWS_ACCESS_KEY'],
         aws_secret_access_key=current_app.config['AWS_SECRET_KEY']
     )
-    patch_name = 'D{revision_id}_{diff_id}.patch'.format(
-        revision_id=revision_id, diff_id=diff_id
+    patch_name = 'L{landing_id}_D{revision_id}_{diff_id}.patch'.format(
+        landing_id=landing_id, revision_id=revision_id, diff_id=diff_id
     )
     bucket = current_app.config['PATCH_BUCKET_NAME']
     patch_url = PATCH_URL_FORMAT.format(bucket=bucket, patch_name=patch_name)
