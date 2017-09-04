@@ -26,6 +26,8 @@ class Landing(db.Model):
         request_id: Id of the request in Autoland
         revision_id: Phabricator id of the revision to be landed
         diff_id: Phabricator id of the diff to be landed
+        active_diff_id: Phabricator id of the diff active at the moment of
+            landing
         status: Status of the landing. Modified by `update` API
         error: Text describing the error if not landed
         result: Revision (sha) of push
@@ -38,6 +40,8 @@ class Landing(db.Model):
     landing in Autoland. It is done before landing request to construct
     required "pingback URL" and save related Patch objects.
     To update the Landing status Transplant is calling provided pingback URL.
+    Active Diff Id is stored only if Lando API was forced to land a specific
+    diff.
     """
     __tablename__ = "landings"
 
@@ -45,6 +49,7 @@ class Landing(db.Model):
     request_id = db.Column(db.Integer, unique=True)
     revision_id = db.Column(db.Integer)
     diff_id = db.Column(db.Integer)
+    active_diff_id = db.Column(db.Integer)
     status = db.Column(db.Integer)
     error = db.Column(db.String(128), default='')
     result = db.Column(db.String(128), default='')
@@ -55,15 +60,19 @@ class Landing(db.Model):
         request_id=None,
         revision_id=None,
         diff_id=None,
+        active_diff_id=None,
         status=TRANSPLANT_JOB_PENDING
     ):
         self.request_id = request_id
         self.revision_id = revision_id
         self.diff_id = diff_id
+        self.active_diff_id = active_diff_id
         self.status = status
 
     @classmethod
-    def create(cls, revision_id, diff_id, phabricator_api_key=None):
+    def create(
+        cls, revision_id, diff_id, phabricator_api_key=None, force=False
+    ):
         """ Land revision.
 
         Args:
@@ -88,12 +97,36 @@ class Landing(db.Model):
         if not revision:
             raise RevisionNotFoundException(revision_id)
 
+        active_id = phab.get_diff(phid=revision['activeDiffPHID'])['id']
+
         # Save landing to make sure we've got the callback URL.
-        landing = cls(revision_id=revision_id, diff_id=diff_id).save()
+        landing = cls(
+            revision_id=revision_id,
+            diff_id=diff_id,
+            active_diff_id=active_id if active_id != diff_id else None
+        ).save()
 
         cls.create_patch(
             landing.id, revision, landing.diff_id, phabricator_api_key
         )
+
+        # If diff used to land revision is not the active one Lando API will
+        # failwith a 409 error (used for that case only). Lando UI will then
+        # display a modal window where user may confirm to land it anyway.
+        # In such case Lando UI will request a new landing with a
+        # force_inactive_diff parameter. API will proceed with the landing.
+        if not force:
+            if diff_id != int(active_id):
+                raise InactiveDiffException(diff_id, active_id)
+        else:
+            logger.warning(
+                {
+                    'revision_id': landing.revision_id,
+                    'diff_id': landing.diff_id,
+                    'active_diff_id': active_id,
+                    'msg': 'Forced to land an inactive Diff'
+                }, 'landing.warning'
+            )
 
         repo = phab.get_revision_repo(revision)
 
@@ -161,6 +194,7 @@ class Landing(db.Model):
               parent_id).upload(phabricator_api_key).save()
 
     def get_patch_urls(self):
+        """ Get list of S3 URLs for all the patches. """
         return [p.s3_url for p in self.patches]
 
     def save(self):
@@ -181,6 +215,7 @@ class Landing(db.Model):
             'revision_id': self.revision_id,
             'request_id': self.request_id,
             'diff_id': self.diff_id,
+            'active_diff_id': self.active_diff_id,
             'status': self.status,
             'error_msg': self.error,
             'result': self.result or '',
@@ -207,3 +242,12 @@ class RevisionNotFoundException(Exception):
     def __init__(self, revision_id):
         super().__init__()
         self.revision_id = revision_id
+
+
+class InactiveDiffException(Exception):
+    """ Diff chosen to land is not the active one """
+
+    def __init__(self, diff_id, active_diff_id):
+        super().__init__()
+        self.diff_id = diff_id
+        self.active_diff_id = active_diff_id

@@ -29,8 +29,8 @@ def test_landing_revision_saves_data_in_db(
     diff_id = 2
 
     phabfactory.user()
-    phabfactory.revision()
-    phabfactory.rawdiff(diff_id)
+    diff = phabfactory.diff(id=diff_id)
+    phabfactory.revision(active_diff=diff)
     transfactory.create_autoland_response(land_request_id)
 
     response = client.post(
@@ -158,7 +158,7 @@ def test_landing_revision_calls_transplant_service(
 
 
 def test_get_transplant_status(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 'D1', 1, None, 'started').save()
     response = client.get('/landings/1')
     assert response.status_code == 200
     assert response.content_type == 'application/json'
@@ -196,12 +196,55 @@ def test_land_nonexisting_diff_returns_404(db, client, phabfactory, s3):
     assert response.json == CANNED_LANDO_DIFF_NOT_FOUND
 
 
+def test_land_inactive_diff_returns_400(
+    db, client, phabfactory, transfactory, s3
+):
+    phabfactory.user()
+    phabfactory.diff()
+    d2 = phabfactory.diff(id=2)
+    phabfactory.revision(active_diff=d2)
+    transfactory.create_autoland_response()
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D1',
+            'diff_id': 1
+        }),
+        content_type='application/json'
+    )
+    assert response.status_code == 409
+    assert response.content_type == 'application/problem+json'
+    assert response.json['title'] == 'Inactive Diff'
+
+    # Landing is saved
+    response = client.get('/landings/1')
+    assert response.json['status'] == 'pending'
+    assert response.json['active_diff_id'] == 2
+
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps(
+            {
+                'revision_id': 'D1',
+                'diff_id': 1,
+                'force_inactive_diff': True
+            }
+        ),
+        content_type='application/json'
+    )
+    assert response.status_code == 202
+
+    response = client.get('/landings/2')
+    assert response.json['status'] == 'started'
+    assert response.json['active_diff_id'] == 2
+
+
 def test_get_jobs(db, client):
-    Landing(1, 'D1', 1, 'started').save()
-    Landing(2, 'D1', 2, 'finished').save()
-    Landing(3, 'D2', 3, 'started').save()
-    Landing(4, 'D1', 4, 'started').save()
-    Landing(5, 'D2', 5, 'finished').save()
+    Landing(1, 'D1', 1, None, 'started').save()
+    Landing(2, 'D1', 2, None, 'finished').save()
+    Landing(3, 'D2', 3, None, 'started').save()
+    Landing(4, 'D1', 4, None, 'started').save()
+    Landing(5, 'D2', 5, None, 'finished').save()
 
     response = client.get('/landings')
     assert response.status_code == 200
@@ -222,7 +265,7 @@ def test_get_jobs(db, client):
 
 
 def test_update_landing(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 'D1', 1, None, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -241,7 +284,7 @@ def test_update_landing(db, client):
 
 
 def test_update_landing_bad_id(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 'D1', 1, None, 'started').save()
 
     response = client.post(
         '/landings/2/update',
@@ -258,7 +301,7 @@ def test_update_landing_bad_id(db, client):
 
 
 def test_update_landing_bad_request_id(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 'D1', 1, None, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -275,7 +318,7 @@ def test_update_landing_bad_request_id(db, client):
 
 
 def test_update_landing_bad_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
+    Landing(1, 'D1', None, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -292,7 +335,7 @@ def test_update_landing_bad_api_key(db, client):
 
 
 def test_update_landing_no_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
+    Landing(1, 'D1', None, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -310,7 +353,7 @@ def test_update_landing_no_api_key(db, client):
 def test_pingback_disabled(db, client, monkeypatch):
     monkeypatch.setenv('PINGBACK_ENABLED', 'n')
 
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 'D1', 1, None, 'started').save()
 
     response = client.post(
         '/landings/1/update',

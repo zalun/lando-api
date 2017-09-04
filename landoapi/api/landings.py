@@ -14,8 +14,9 @@ from connexion import problem
 from flask import request
 from sqlalchemy.orm.exc import NoResultFound
 from landoapi.models.landing import (
-    Landing, LandingNotCreatedException, MultipleParentRevisionsDetected,
-    RevisionNotFoundException, TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
+    InactiveDiffException, Landing, LandingNotCreatedException,
+    MultipleParentRevisionsDetected, RevisionNotFoundException,
+    TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
 )
 from landoapi.models.patch import DiffNotFoundException
 
@@ -28,6 +29,7 @@ def land(data, api_key=None):
     # get revision_id from body
     revision_id = data['revision_id']
     diff_id = data['diff_id']
+    force = data.get('force_inactive_diff', False)
     logger.info(
         {
             'path': request.path,
@@ -37,7 +39,7 @@ def land(data, api_key=None):
         }, 'landing.invoke'
     )
     try:
-        landing = Landing.create(revision_id, diff_id, api_key)
+        landing = Landing.create(revision_id, diff_id, api_key, force)
     except RevisionNotFoundException:
         # We could not find a matching revision.
         logger.info(
@@ -84,6 +86,21 @@ def land(data, api_key=None):
                 revision_id=exc.revision_id
             ),
             type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/400'
+        )
+    except InactiveDiffException as exc:
+        # Attempt to land an inactive diff
+        logger.info(
+            {
+                'revision': revision_id,
+                'diff_id': exc.diff_id,
+                'active_diff_id': exc.active_diff_id
+            }, 'landing.failure'
+        )
+        return problem(
+            409,
+            'Inactive Diff',
+            'The requested diff is not the active one for the revision.',
+            type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/409'
         )
     except LandingNotCreatedException as exc:
         # We could not find a matching revision.
