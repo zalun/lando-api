@@ -106,6 +106,8 @@ paths:
                 type: string
               diff_id:
                 type: integer
+              force_inactive_diff:
+                type: boolean
         - name: api_key
           in: query
           type: string
@@ -123,12 +125,17 @@ paths:
                 description: |
                   A newly created Landing id
         400:
-          description: Landing revision failed because of data provided
+          description: Landing revision failed.
           schema:
             allOf:
               - $ref: '#/definitions/Error'
         404:
           description: Revision does not exist
+          schema:
+            allOf:
+              - $ref: '#/definitions/Error'
+        409:
+          description: Attempt to land an inactive diff.
           schema:
             allOf:
               - $ref: '#/definitions/Error'
