@@ -122,6 +122,11 @@ paths:
                 type: integer
                 description: |
                   A newly created Landing id
+        400:
+          description: Landing revision failed because of data provided
+          schema:
+            allOf:
+              - $ref: '#/definitions/Error'
         404:
           description: Revision does not exist
           schema:
@@ -247,6 +252,12 @@ definitions:
         type: integer
         description: |
           diff id used to land
+      patch_urls:
+        type: array
+        items: 
+          type: string
+        description: |
+          List of S3 URLs of all patches in landing
       result:
         type: string
         description: |
