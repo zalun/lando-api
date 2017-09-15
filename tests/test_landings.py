@@ -1,10 +1,12 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+import datetime
 import json
 import os
 import pytest
 
+from freezegun import freeze_time
 from unittest.mock import MagicMock
 
 from landoapi.hgexportbuilder import build_patch_for_revision
@@ -16,6 +18,14 @@ from tests.canned_responses.lando_api.revisions import *
 from tests.canned_responses.lando_api.landings import *
 
 
+def test_type_conversion_in_landing():
+    l1 = Landing(1, 1, 1)
+    l2 = Landing(2, 'D1', 1)
+    assert l1.revision_id == 1
+    assert l2.revision_id == 1
+
+
+@freeze_time('2017-09-12')
 def test_landing_revision_saves_data_in_db(
     db, client, phabfactory, transfactory, s3
 ):
@@ -83,7 +93,7 @@ def test_landing_revision_calls_transplant_service(
         content_type='application/json'
     )
     tsclient().land.assert_called_once_with(
-        'ldap_username@example.com', patch_url, repo_uri,
+        'ldap_username@example.com', [patch_url], repo_uri,
         '{}/landings/1/update'.format(os.getenv('PINGBACK_HOST_URL'))
     )
     body = s3.Object('landoapi.test.bucket',
@@ -91,6 +101,7 @@ def test_landing_revision_calls_transplant_service(
     assert body == hgpatch
 
 
+@freeze_time('2017-09-12')
 def test_get_transplant_status(db, client):
     Landing(1, 'D1', 1, 'started').save()
     response = client.get('/landings/1')
@@ -129,6 +140,7 @@ def test_land_nonexisting_diff_returns_404(db, client, phabfactory, s3):
     assert response.json == CANNED_LANDO_DIFF_NOT_FOUND
 
 
+@freeze_time('2017-09-12')
 def test_get_jobs(db, client):
     Landing(1, 'D1', 1, 'started').save()
     Landing(2, 'D1', 2, 'finished').save()

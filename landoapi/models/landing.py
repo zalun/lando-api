@@ -10,6 +10,7 @@ from landoapi.models.patch import Patch
 from landoapi.phabricator_client import PhabricatorClient
 from landoapi.storage import db
 from landoapi.transplant_client import TransplantClient
+from landoapi.utils import revision_id_to_int
 
 logger = logging.getLogger(__name__)
 
@@ -62,9 +63,7 @@ class Landing(db.Model):
         status=TRANSPLANT_JOB_PENDING
     ):
         self.request_id = request_id
-        if isinstance(revision_id, str):
-            revision_id = int(revision_id.strip().replace('D', ''))
-        self.revision_id = revision_id
+        self.revision_id = revision_id_to_int(revision_id)
         self.diff_id = diff_id
         self.status = status
         self.created = datetime.utcnow()
@@ -74,9 +73,9 @@ class Landing(db.Model):
         """Land revision.
 
         A typical successful story:
+            * Landing object is created (without request_id)
             * Revision and Diff are loaded from Phabricator.
             * Patch is created and uploaded to S3 bucket.
-            * Landing object is created (without request_id)
             * A request to land the patch is send to Transplant client.
             * Created landing object is updated with returned `request_id`,
               it is then saved and returned.
@@ -90,9 +89,9 @@ class Landing(db.Model):
             A new Landing object
 
         Raises:
-            RevisionNotFoundException: PhabricatorClient returned no revision
-                for given revision_id
-            LandingNotCreatedException: landing request in Transplant failed
+            LandingNotCreatedException: landing request failed in Transplant
+            RevisionNotFoundException: PhabricatorClient returned no
+                revision for given revision_id
         """
         phab = PhabricatorClient(phabricator_api_key)
 
@@ -101,13 +100,13 @@ class Landing(db.Model):
         landing.save()
 
         # collect revisions with its eventual parents
-        revision = phab.get_revision(id=revision_id)
+        revision = phab.get_revision(id=landing.revision_id)
         if not revision:
-            raise RevisionNotFoundException(revision_id)
+            raise RevisionNotFoundException(landing.revision_id)
 
         # create patch for the revision
-        patch = Patch(landing.id, revision, diff_id)
-        patch.upload(phab)
+        patch = Patch(landing.id, revision, diff_id, phabricator=phab)
+        patch.upload()
         patch.save()
 
         repo = phab.get_revision_repo(revision)

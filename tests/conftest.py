@@ -8,6 +8,7 @@ import os
 import pytest
 import requests_mock
 
+from flask import current_app
 from moto import mock_s3
 
 from landoapi.app import create_app

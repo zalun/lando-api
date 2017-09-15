@@ -13,11 +13,13 @@ import os
 from connexion import problem
 from flask import request
 from sqlalchemy.orm.exc import NoResultFound
+
 from landoapi.models.landing import (
     Landing, LandingNotCreatedException, RevisionNotFoundException,
     TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
 )
 from landoapi.models.patch import DiffNotFoundException
+from landoapi.utils import revision_id_to_int
 
 logger = logging.getLogger(__name__)
 TRANSPLANT_API_KEY = os.getenv('TRANSPLANT_API_KEY')
@@ -36,6 +38,7 @@ def land(data, api_key=None):
             'msg': 'landing requested by user'
         }, 'landing.invoke'
     )
+
     try:
         landing = Landing.create(revision_id, diff_id, api_key)
     except RevisionNotFoundException:
@@ -90,6 +93,7 @@ def get_list(revision_id=None, status=None):
     """API endpoint at GET /landings to return a list of Landing objects."""
     kwargs = {}
     if revision_id:
+        revision_id = revision_id_to_int(revision_id)
         kwargs['revision_id'] = revision_id
 
     if status:

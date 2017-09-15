@@ -122,6 +122,11 @@ paths:
                 type: integer
                 description: |
                   A newly created Landing id
+        400:
+          description: Landing revision failed because of data provided
+          schema:
+            allOf:
+              - $ref: '#/definitions/Error'
         404:
           description: Revision does not exist
           schema:

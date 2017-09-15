@@ -10,6 +10,7 @@ from flask import current_app
 
 from landoapi.hgexportbuilder import build_patch_for_revision
 from landoapi.storage import db
+from landoapi.utils import revision_id_to_int
 
 logger = logging.getLogger(__name__)
 
@@ -43,25 +44,26 @@ class Patch(db.Model):
     s3_url = db.Column(db.String(128))
     created = db.Column(db.DateTime())
 
-    def __init__(self, landing_id, revision, diff_id, s3_url=None):
+    def __init__(
+        self, landing_id, revision, diff_id, s3_url=None, phabricator=None
+    ):
         """Create a patch instance.
 
         Args:
             landing_id: id of the Landing
             revision: The revision as defined by Phabricator API
             diff_id: The id of the diff to be landed
-            s3_url: String representing the patch's URL in S3
-                (ex. 's3://{bucket_name}/L34_D123_567.patch')
+            phabricator: PhabricatorClient instance
         """
         self.landing_id = int(landing_id)
-        self.revision_id = int(revision['id'])
+        self.revision_id = revision_id_to_int(revision['id'])
         self.diff_id = int(diff_id)
-        self.s3_url = s3_url
         self.created = datetime.datetime.utcnow()
-        # store revision for `upload`
-        self.revision = revision
+        # store revision and phabricator client for build
+        self._revision = revision
+        self._phabricator = phabricator
 
-    def build(self, phab):
+    def build(self):
         """Build the patch contents using diff.
 
         Request diff and revision author from Phabricator API and build the
@@ -74,23 +76,20 @@ class Patch(db.Model):
             DiffNotFoundException: PhabricatorClient returned no diff for
                 given diff_id
         """
-        diff = phab.get_rawdiff(self.diff_id)
+        diff = self._phabricator.get_rawdiff(self.diff_id)
 
         if not diff:
             raise DiffNotFoundException(self.diff_id)
 
-        author = phab.get_revision_author(self.revision)
-        return build_patch_for_revision(diff, author, self.revision)
+        author = self._phabricator.get_revision_author(self._revision)
+        return build_patch_for_revision(diff, author, self._revision)
 
-    def upload(self, phab):
+    def upload(self):
         """Upload the patch to S3 Bucket.
 
         Build the patch contents and upload to S3.
-
-        Args:
-            phab: PhabricatorClient instance
         """
-        hgpatch = self.build(phab)
+        hgpatch = self.build()
 
         # Upload patch to S3.
         s3 = boto3.resource(
@@ -100,13 +99,14 @@ class Patch(db.Model):
         )
         patch_name = PATCH_NAME_FORMAT.format(
             landing_id=self.landing_id,
-            revision_id=self.revision['id'],
+            revision_id=self._revision['id'],
             diff_id=self.diff_id
         )
         bucket = current_app.config['PATCH_BUCKET_NAME']
         self.s3_url = PATCH_URL_FORMAT.format(
             bucket=bucket, patch_name=patch_name
         )
+
         with tempfile.TemporaryFile() as patchfile:
             patchfile.write(hgpatch.encode('utf-8'))
             patchfile.seek(0)
