@@ -198,6 +198,16 @@ class PhabResponseFactory:
         )
         return rawdiff
 
+    def rawdiff_error(self, diff_id='1', error_code=400, error_info='error'):
+        """Raise PhabricatorAPIException on accessing the rawdiff."""
+        self.mock.get(
+            phab_url('differential.getrawdiff'),
+            status_code=400,
+            json={'error_code': error_code,
+                  'error_info': error_info},
+            additional_matcher=form_matcher('diffID', str(diff_id))
+        )
+
     def repo(self):
         """Return a Phabricator Repo."""
         repo = deepcopy(CANNED_REPO_MOZCENTRAL)

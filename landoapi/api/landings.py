@@ -6,28 +6,29 @@ Landing API
 See the OpenAPI Specification for this API in the spec/swagger.yml file.
 """
 import hmac
-import json
 import logging
 import os
 
 from connexion import problem
 from flask import request
 from sqlalchemy.orm.exc import NoResultFound
+
 from landoapi.models.landing import (
     Landing, LandingNotCreatedException, RevisionNotFoundException,
     TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
 )
 from landoapi.models.patch import DiffNotFoundException
+from landoapi.phabricator import revision_id_to_int
 
 logger = logging.getLogger(__name__)
 TRANSPLANT_API_KEY = os.getenv('TRANSPLANT_API_KEY')
 
 
-def land(data, api_key=None):
+def post(data, api_key=None):
     """API endpoint at POST /landings to land revision."""
     # get revision_id from body
-    revision_id = data['revision_id']
-    diff_id = data['diff_id']
+    revision_id = revision_id_to_int(data['revision_id'])
+    diff_id = int(data['diff_id'])
     logger.info(
         {
             'path': request.path,
@@ -36,6 +37,7 @@ def land(data, api_key=None):
             'msg': 'landing requested by user'
         }, 'landing.invoke'
     )
+
     try:
         landing = Landing.create(revision_id, diff_id, api_key)
     except RevisionNotFoundException:
@@ -82,6 +84,9 @@ def land(data, api_key=None):
             'Please retry your request at a later time.',
             type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502'
         )
+    except Exception:
+        import traceback
+        traceback.print_exc()
 
     return {'id': landing.id}, 202
 
@@ -90,6 +95,7 @@ def get_list(revision_id=None, status=None):
     """API endpoint at GET /landings to return a list of Landing objects."""
     kwargs = {}
     if revision_id:
+        revision_id = revision_id_to_int(revision_id)
         kwargs['revision_id'] = revision_id
 
     if status:

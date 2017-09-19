@@ -45,7 +45,7 @@ def get_commit_message_errors(
     """
     Validates the format of a commit message title.
 
-    Checks to ensure it adheres to standard hg.mozilla.org format which 
+    Checks to ensure it adheres to standard hg.mozilla.org format which
     _loosely_ follows the pattern:
         <Bug #> - <Message Title> r=<reviewer1>,r=<reviewer2>...
 

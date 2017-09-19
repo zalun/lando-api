@@ -19,9 +19,15 @@ def revision(message):
 
 
 @manager.command
-def upgrade():
-    """Run all available migration upgrades."""
-    return alembic.upgrade()
+def upgrade(target='heads'):
+    """Run migration upgrades."""
+    return alembic.upgrade(target=target)
+
+
+@manager.command
+def downgrade(target):
+    """Run migration upgrades."""
+    return alembic.downgrade(target=target)
 
 
 if __name__ == "__main__":

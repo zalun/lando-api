@@ -5,10 +5,12 @@ import json
 import os
 import pytest
 
+from freezegun import freeze_time
 from unittest.mock import MagicMock
 
 from landoapi.hgexportbuilder import build_patch_for_revision
 from landoapi.models.landing import Landing, TRANSPLANT_JOB_LANDED
+from landoapi.models.patch import Patch
 from landoapi.phabricator_client import PhabricatorClient
 from landoapi.transplant_client import TransplantClient
 
@@ -16,6 +18,7 @@ from tests.canned_responses.lando_api.revisions import *
 from tests.canned_responses.lando_api.landings import *
 
 
+@freeze_time('2017-09-12')
 def test_landing_revision_saves_data_in_db(
     db, client, phabfactory, transfactory, s3
 ):
@@ -50,7 +53,29 @@ def test_landing_revision_saves_data_in_db(
     landing.request_id = land_request_id
     assert landing.serialize() == CANNED_LANDING_FACTORY_1
 
+    # Get Patch object by its id
+    patch = Patch.query.get(1)
+    patch.landing_id = 1
+    patch.diff_id = diff_id
 
+
+def test_transaction_is_rolled_back(db, client, phabfactory, transfactory, s3):
+    phabfactory.revision()
+    phabfactory.rawdiff_error()
+    phab = PhabricatorClient(api_key='api-key')
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D1',
+            'diff_id': 1
+        }),
+        content_type='application/json'
+    )
+    landing = Landing.query.get(1)
+    assert landing is None
+
+
+@freeze_time('2017-09-12')
 def test_landing_revision_calls_transplant_service(
     db, client, phabfactory, monkeypatch, s3
 ):
@@ -64,7 +89,7 @@ def test_landing_revision_calls_transplant_service(
     gitdiff = phabclient.get_rawdiff(diff_id)
     author = phabclient.get_revision_author(revision)
     hgpatch = build_patch_for_revision(gitdiff, author, revision)
-    patch_url = 's3://landoapi.test.bucket/L1_D1_1.patch'
+    patch_url = 's3://landoapi.test.bucket/D1_1_1505174400.patch'
 
     # The repo we expect to see
     repo_uri = phabclient.get_revision_repo(revision)['uri']
@@ -81,16 +106,17 @@ def test_landing_revision_calls_transplant_service(
         content_type='application/json'
     )
     tsclient().land.assert_called_once_with(
-        'ldap_username@example.com', patch_url, repo_uri,
+        'ldap_username@example.com', [patch_url], repo_uri,
         '{}/landings/1/update'.format(os.getenv('PINGBACK_HOST_URL'))
     )
-    body = s3.Object('landoapi.test.bucket',
-                     'L1_D1_1.patch').get()['Body'].read().decode("utf-8")
+    body = s3.Object('landoapi.test.bucket', 'D1_1_1505174400.patch'
+                    ).get()['Body'].read().decode("utf-8")
     assert body == hgpatch
 
 
+@freeze_time('2017-09-12')
 def test_get_transplant_status(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, 'started').save()
     response = client.get('/landings/1')
     assert response.status_code == 200
     assert response.content_type == 'application/json'
@@ -127,12 +153,13 @@ def test_land_nonexisting_diff_returns_404(db, client, phabfactory, s3):
     assert response.json == CANNED_LANDO_DIFF_NOT_FOUND
 
 
+@freeze_time('2017-09-12')
 def test_get_jobs(db, client):
-    Landing(1, 'D1', 1, 'started').save()
-    Landing(2, 'D1', 2, 'finished').save()
-    Landing(3, 'D2', 3, 'started').save()
-    Landing(4, 'D1', 4, 'started').save()
-    Landing(5, 'D2', 5, 'finished').save()
+    Landing(1, 1, 1, 'started').save()
+    Landing(2, 1, 2, 'finished').save()
+    Landing(3, 2, 3, 'started').save()
+    Landing(4, 1, 4, 'started').save()
+    Landing(5, 2, 5, 'finished').save()
 
     response = client.get('/landings')
     assert response.status_code == 200
@@ -153,7 +180,7 @@ def test_get_jobs(db, client):
 
 
 def test_update_landing(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -172,7 +199,7 @@ def test_update_landing(db, client):
 
 
 def test_update_landing_bad_id(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, 'started').save()
 
     response = client.post(
         '/landings/2/update',
@@ -189,7 +216,7 @@ def test_update_landing_bad_id(db, client):
 
 
 def test_update_landing_bad_request_id(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -206,7 +233,7 @@ def test_update_landing_bad_request_id(db, client):
 
 
 def test_update_landing_bad_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
+    Landing(1, 1, 1, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -223,7 +250,7 @@ def test_update_landing_bad_api_key(db, client):
 
 
 def test_update_landing_no_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
+    Landing(1, 1, 1, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -241,7 +268,7 @@ def test_update_landing_no_api_key(db, client):
 def test_pingback_disabled(db, client, monkeypatch):
     monkeypatch.setenv('PINGBACK_ENABLED', 'n')
 
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, 'started').save()
 
     response = client.post(
         '/landings/1/update',

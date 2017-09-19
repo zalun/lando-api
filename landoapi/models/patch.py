@@ -2,33 +2,69 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import boto3
+import datetime
 import logging
 import tempfile
+import time
 
 from flask import current_app
 
 from landoapi.hgexportbuilder import build_patch_for_revision
+from landoapi.storage import db
+from landoapi.phabricator import revision_id_to_int
 
 logger = logging.getLogger(__name__)
 
 PATCH_URL_FORMAT = 's3://{bucket}/{patch_name}'
-PATCH_NAME_FORMAT = 'L{landing_id}_D{revision_id}_{diff_id}.patch'
+PATCH_NAME_FORMAT = 'D{revision_id}_{diff_id}_{timestamp}.patch'
 
 
-class Patch:
-    def __init__(self, landing_id, revision, diff_id):
+class Patch(db.Model):
+    """Represents patches uploaded to S3 and provided for landing.
+
+    Patch is created in a landing process. Many patches might be related
+    to a Landing.
+    Some revisions are stacked and parent_id represents the patch which needs
+    to be landed before the current one. If revision is related directly to
+    a master, patch will have no parent and parent_id will be None.
+
+    Attributes:
+        id: PK
+        landing_id: Id of the Landing in LandoAPI
+        revision_id: Id of the revision in Phabricator
+        diff_id: Id of the diff in Phabricator
+        s3_url: A URL in PATCH_URL_FORMAT
+        created: DateTime of creation of the Patch object
+    """
+    __tablename__ = "patches"
+
+    id = db.Column(db.Integer, primary_key=True)
+    landing_id = db.Column(db.Integer, db.ForeignKey('landings.id'))
+    revision_id = db.Column(db.Integer)
+    diff_id = db.Column(db.Integer)
+    s3_url = db.Column(db.String(128))
+    created = db.Column(db.DateTime())
+
+    __phabricator = None
+
+    def __init__(self, landing_id, revision, diff_id, phabricator=None):
         """Create a patch instance.
 
         Args:
-            landing_id: Id of the landing in Lando API
-            revision: The revision as returned by PhabricatorClient
+            landing_id: id of the Landing
+            revision: The revision as defined by Phabricator API
             diff_id: The id of the diff to be landed
+            phabricator: PhabricatorClient instance
         """
         self.landing_id = landing_id
+        self.revision_id = revision_id_to_int(revision['id'])
         self.diff_id = diff_id
-        self.revision = revision
+        self.created = datetime.datetime.utcnow()
+        # store revision and phabricator client for build
+        self.__revision = revision
+        self.__phabricator = phabricator
 
-    def build(self, phab):
+    def build(self):
         """Build the patch contents using diff.
 
         Request diff and revision author from Phabricator API and build the
@@ -41,34 +77,34 @@ class Patch:
             DiffNotFoundException: PhabricatorClient returned no diff for
                 given diff_id
         """
-        diff = phab.get_rawdiff(self.diff_id)
+        diff = self.__phabricator.get_rawdiff(self.diff_id)
 
         if not diff:
             raise DiffNotFoundException(self.diff_id)
 
-        author = phab.get_revision_author(self.revision)
-        return build_patch_for_revision(diff, author, self.revision)
+        author = self.__phabricator.get_revision_author(self.__revision)
+        return build_patch_for_revision(diff, author, self.__revision)
 
-    def upload(self, phab):
+    def upload(self):
         """Upload the patch to S3 Bucket.
 
         Build the patch contents and upload to S3.
-
-        Args:
-            phab: PhabricatorClient instance
         """
-        hgpatch = self.build(phab)
-
+        hgpatch = self.build()
         # Upload patch to S3.
+        # AWS credentials need to be set only for the development of Lando API.
+        # This allows developers to save patch in a private basket.
+        # AWS_ACCESS_KEY and AWS_SECRET_KEY need to be left unconfigured
+        # in production servers.
         s3 = boto3.resource(
             's3',
             aws_access_key_id=current_app.config['AWS_ACCESS_KEY'],
             aws_secret_access_key=current_app.config['AWS_SECRET_KEY']
         )
         patch_name = PATCH_NAME_FORMAT.format(
-            landing_id=self.landing_id,
-            revision_id=self.revision['id'],
-            diff_id=self.diff_id
+            revision_id=self.revision_id,
+            diff_id=self.diff_id,
+            timestamp=str(time.time()).split('.')[0]
         )
         bucket = current_app.config['PATCH_BUCKET_NAME']
         self.s3_url = PATCH_URL_FORMAT.format(
@@ -85,6 +121,17 @@ class Patch:
                 'msg': 'Patch file uploaded'
             }, 'landing.patch_uploaded'
         )
+
+    def save(self, session=None, commit=True):
+        """Save object to db."""
+        session = session or db.session
+        if not self.id:
+            session.add(self)
+
+        if commit:
+            return session.commit()
+
+        return session.commit()
 
 
 class DiffNotFoundException(Exception):

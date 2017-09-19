@@ -84,7 +84,6 @@ paths:
               - $ref: '#/definitions/Error'
 
     post:
-      operationId: landoapi.api.landings.land
       description: |
         Sends request to transplant service and responds just the status code
       parameters:

@@ -98,12 +98,25 @@ def add_migration(ctx, msg):
     )
 
 
-@task
-def upgrade(ctx):
-    """Call Alembic to run all available migration upgrades."""
+@task(
+    help={
+        'target': 'Hash of the migration to upgrade to (default: \'heads\')'
+    }
+)
+def upgrade(ctx, target='heads'):
+    """Call Alembic to run available migration upgrades."""
     ctx.run(
         "docker-compose run --rm lando-api "
-        "python landoapi/manage.py upgrade"
+        "python landoapi/manage.py upgrade --target {}".format(target)
+    )
+
+
+@task(help={'target': 'Hash of the migration to downgrade to.'})
+def downgrade(ctx, target):
+    """Call Alembic to downgrade a migration."""
+    ctx.run(
+        "docker-compose run --rm lando-api "
+        "python landoapi/manage.py downgrade {}".format(target)
     )
 
 
@@ -113,5 +126,5 @@ namespace = Collection(
         lint_all,
         lint_flake8,
         lint_yapf,
-    ), add_migration, build, format, imageid, test, upgrade, version
+    ), add_migration, build, downgrade, format, imageid, test, upgrade, version
 )
