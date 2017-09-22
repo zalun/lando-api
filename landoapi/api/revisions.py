@@ -5,10 +5,16 @@
 Revision API
 See the OpenAPI Specification for this API in the spec/swagger.yml file.
 """
+import logging
+
 from connexion import problem
 
-from landoapi.phabricator_client import PhabricatorClient
+from landoapi.phabricator_client import (
+    PhabricatorClient, PhabricatorAPIException
+)
 from landoapi.utils import format_commit_message
+
+logger = logging.getLogger(__name__)
 
 
 def get(revision_id, api_key=None):
@@ -17,7 +23,23 @@ def get(revision_id, api_key=None):
     Returns None or revision.
     """
     phab = PhabricatorClient(api_key)
-    revision = phab.get_revision(id=revision_id)
+    try:
+        revision = phab.get_revision(id=revision_id)
+    except PhabricatorAPIException as exc:
+        # Unknown PhabricatorAPI error
+        logger.info(
+            {
+                'revision': revision_id,
+                'exc': exc,
+                'msg': 'Generic Phabricator API Exception'
+            }, 'revision.error'
+        )
+        return problem(
+            500,
+            'Get revision failed',
+            exc.error_info,
+            type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500'
+        )
 
     if not revision:
         # We could not find a matching revision.

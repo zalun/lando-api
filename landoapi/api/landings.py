@@ -18,6 +18,7 @@ from landoapi.models.landing import (
     TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
 )
 from landoapi.models.patch import DiffNotFoundException
+from landoapi.phabricator_client import PhabricatorAPIException
 
 logger = logging.getLogger(__name__)
 TRANSPLANT_API_KEY = os.getenv('TRANSPLANT_API_KEY')
@@ -76,11 +77,29 @@ def land(data, api_key=None):
             }, 'landing.error'
         )
         return problem(
-            502,
+            500,
             'Landing not created',
             'The requested revision does exist, but landing failed.'
             'Please retry your request at a later time.',
-            type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502'
+            type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500'
+        )
+    except PhabricatorAPIException as exc:
+        # Unknown PhabricatorAPI error
+        # I.e. calling /differential.getrawdiff might end up with:
+        # [Access Denied: Unknown Object (VOID)] (Can View) You do not have
+        # permission to view this object.
+        logger.info(
+            {
+                'revision': revision_id,
+                'exc': exc,
+                'msg': 'Generic Phabricator API Exception'
+            }, 'landing.error'
+        )
+        return problem(
+            500,
+            'Landing failed. Communication with Phabricator issue.',
+            exc.error_info,
+            type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500'
         )
 
     return {'id': landing.id}, 202

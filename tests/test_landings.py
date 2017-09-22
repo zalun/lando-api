@@ -4,16 +4,20 @@
 import json
 import os
 import pytest
+import requests
 
 from unittest.mock import MagicMock
 
 from landoapi.hgexportbuilder import build_patch_for_revision
 from landoapi.models.landing import Landing, TRANSPLANT_JOB_LANDED
-from landoapi.phabricator_client import PhabricatorClient
+from landoapi.phabricator_client import (
+    PhabricatorClient, PhabricatorAPIException
+)
 from landoapi.transplant_client import TransplantClient
 
 from tests.canned_responses.lando_api.revisions import *
 from tests.canned_responses.lando_api.landings import *
+from tests.utils import phab_url
 
 
 def test_landing_revision_saves_data_in_db(
@@ -125,6 +129,26 @@ def test_land_nonexisting_diff_returns_404(db, client, phabfactory, s3):
     assert response.status_code == 404
     assert response.content_type == 'application/problem+json'
     assert response.json == CANNED_LANDO_DIFF_NOT_FOUND
+
+
+def test_api_handles_phabricator_api_exception(db, client, phabfactory, s3):
+    phabfactory.user()
+    phabfactory.revision()
+    phabfactory.rawdiff_error(error_info='some error')
+    phab = PhabricatorClient(api_key='api-key')
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D1',
+            'diff_id': 1
+        }),
+        content_type='application/json'
+    )
+    assert response.status_code == 500
+    assert response.json['title'] == (
+        'Landing failed. Communication with Phabricator issue.'
+    )
+    assert response.json['detail'] == 'some error'
 
 
 def test_get_jobs(db, client):

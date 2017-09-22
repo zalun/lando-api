@@ -91,10 +91,7 @@ class TransplantClient:
         )
 
         if 'error' in response:
-            exp = TransplantAPIException()
-            exp.error_code = status_code
-            exp.error_info = response.get('error')
-            raise exp
+            raise TransplantAPIException(status_code, response.get('error'))
 
         return response
 
@@ -107,5 +104,8 @@ class TransplantClient:
 
 class TransplantAPIException(Exception):
     """An exception class to handle errors from the Transplant API."""
-    error_code = None
-    error_info = None
+
+    def __init__(self, error_code, error_info):
+        super().__init__()
+        self.error_code = error_code
+        self.error_info = error_info

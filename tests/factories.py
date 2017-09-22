@@ -134,6 +134,21 @@ class PhabResponseFactory:
         )
         return result_json
 
+    def revision_error(self, id='D1', error_code=400, error_info='error'):
+        """Raise PhabricatorAPIException on accessing the revision."""
+        str_id = id
+        num_id = str_id[1:]
+        phid = 'PHID-DREV-%s' % num_id
+        self.mock.get(
+            phab_url('differential.query'),
+            status_code=200,
+            json={'error_code': error_code,
+                  'error_info': error_info},
+            additional_matcher=(
+                form_matcher('ids[]', num_id) or form_matcher('phids[]', phid)
+            )
+        )
+
     def diff(self, **kwargs):
         """Create a Phabricator Diff along with stub API endpoints.
 
@@ -197,6 +212,16 @@ class PhabResponseFactory:
             additional_matcher=form_matcher('diffID', str(diff_id))
         )
         return rawdiff
+
+    def rawdiff_error(self, diff_id='1', error_code=400, error_info='error'):
+        """Raise PhabricatorAPIException on accessing the rawdiff."""
+        self.mock.get(
+            phab_url('differential.getrawdiff'),
+            status_code=400,
+            json={'error_code': error_code,
+                  'error_info': error_info},
+            additional_matcher=form_matcher('diffID', str(diff_id))
+        )
 
     def repo(self):
         """Return a Phabricator Repo."""

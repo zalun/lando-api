@@ -44,3 +44,12 @@ def test_get_revision_returns_404(client, phabfactory):
     assert response.status_code == 404
     assert response.content_type == 'application/problem+json'
     assert response.json == CANNED_LANDO_REVISION_NOT_FOUND
+
+
+def test_get_revision_returns_500(client, phabfactory):
+    phabfactory.revision_error()
+    response = client.get('/revisions/D1?api_key=api-key')
+    assert response.status_code == 500
+    assert response.content_type == 'application/problem+json'
+    assert response.json['title'] == 'Get revision failed'
+    assert response.json['detail'] == 'error'

@@ -206,10 +206,9 @@ class PhabricatorClient:
         ).json()
 
         if response['error_code']:
-            exp = PhabricatorAPIException(response.get('error_info'))
-            exp.error_code = response.get('error_code')
-            exp.error_info = response.get('error_info')
-            raise exp
+            raise PhabricatorAPIException(
+                response.get('error_code'), response.get('error_info')
+            )
 
         return response.get('result')
 
@@ -222,5 +221,8 @@ class PhabricatorClient:
 
 class PhabricatorAPIException(Exception):
     """An exception class to handle errors from the Phabricator API."""
-    error_code = None
-    error_info = None
+
+    def __init__(self, error_code=None, error_info=None):
+        super().__init__()
+        self.error_code = error_code
+        self.error_info = error_info
