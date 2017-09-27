@@ -18,7 +18,8 @@ services:
       # create a new Conduit API token and add it here.
       - PHABRICATOR_UNPRIVILEGED_API_KEY=api-123456789
       - TRANSPLANT_URL=https://fake-transplant.herokuapp.com/
-      - DATABASE_URL=sqlite:////db/sqlite.db
+        # - DATABASE_URL=sqlite:////db/sqlite.db
+      - DATABASE_URL=postgresql://postgres:password@postgres.test/postgres
       - ENV=localdev
       - SENTRY_DSN=
       - TRANSPLANT_API_KEY=set-api-key
@@ -38,3 +39,17 @@ services:
       dockerfile: ./docker/py3-linter-dockerfile
     volumes:
       - ./:/code/
+  postgres.pytest:
+    image: postgres:alpine
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+  postgres.test:
+    image: postgres:alpine
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=postgres
+    volumes:
+      - ./docker/postgres/data:/var/lib/postgresql/data

@@ -8,7 +8,7 @@ from landoapi.models.patch import Patch
 from landoapi.phabricator_client import PhabricatorClient
 
 
-def test_patch_uploads_to_s3(db, phabfactory, s3):
+def test_patch_uploads_to_s3(phabfactory, s3):
     phabfactory.user()
     phabfactory.revision()
     phabfactory.rawdiff(1)

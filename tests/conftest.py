@@ -9,6 +9,7 @@ import pytest
 import requests_mock
 
 from moto import mock_s3
+from sqlalchemy.exc import OperationalError
 
 from landoapi.app import create_app
 from landoapi.storage import db as _db
@@ -20,7 +21,11 @@ def docker_env_vars(monkeypatch):
     """Monkeypatch environment variables that we'd get running under docker."""
     monkeypatch.setenv('PHABRICATOR_URL', 'http://phabricator.test')
     monkeypatch.setenv('TRANSPLANT_URL', 'http://autoland.test')
-    monkeypatch.setenv('DATABASE_URL', 'sqlite://')
+    #monkeypatch.setenv('DATABASE_URL', 'sqlite://')
+    monkeypatch.setenv(
+        'DATABASE_URL',
+        'postgresql://postgres:password@postgres.pytest/postgres'
+    )
     monkeypatch.setenv('TRANSPLANT_API_KEY', 'someapikey')
     monkeypatch.setenv('PINGBACK_ENABLED', 'y')
     monkeypatch.setenv('PINGBACK_HOST_URL', 'http://lando-api.test')
@@ -97,19 +102,29 @@ def db(app):
     """Reset database for each test."""
     with app.app_context():
         _db.init_app(app)
-        _db.create_all()
-        # we just created.
+        # Skip if database is not available.
+        try:
+            _db.create_all()
+        except OperationalError as exc:
+            # Check if that's exactly the exception which needs to be skipped
+            if 'Name does not resolve' not in str(exc):
+                raise
+
+            pytest.skip('Unable to initialize the database')
+
         yield _db
         _db.session.remove()
         _db.drop_all()
 
 
 @pytest.fixture
-def s3(docker_env_vars):
+def s3(app, docker_env_vars):
     """Provide s3 mocked connection."""
     bucket = os.getenv('PATCH_BUCKET_NAME')
-    with mock_s3():
-        s3 = boto3.resource('s3')
-        # We need to create the bucket since this is all in Moto's 'virtual' AWS account
-        s3.create_bucket(Bucket=bucket)
-        yield s3
+    with app.app_context():
+        with mock_s3():
+            s3 = boto3.resource('s3')
+            # We need to create the bucket since this is all in Moto's
+            # 'virtual' AWS account
+            s3.create_bucket(Bucket=bucket)
+            yield s3

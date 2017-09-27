@@ -32,9 +32,9 @@ ENV UWSGI_MODULE=landoapi.wsgi:app \
     UWSGI_NEED_APP=1
 
 RUN apk --update --no-cache add \
-	sqlite
-RUN mkdir /db
-RUN chown app:app /db
+	postgresql-dev \
+	gcc \
+	musl-dev
 
 COPY migrations /migrations
 

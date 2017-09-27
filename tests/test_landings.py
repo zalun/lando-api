@@ -16,6 +16,9 @@ from tests.canned_responses.lando_api.revisions import *
 from tests.canned_responses.lando_api.landings import *
 
 
+def test_obvious(s3):
+    assert 1 == 1
+
 def test_landing_revision_saves_data_in_db(
     db, client, phabfactory, transfactory, s3
 ):
@@ -206,7 +209,7 @@ def test_update_landing_bad_request_id(db, client):
 
 
 def test_update_landing_bad_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
+    Landing(1, 'D1', 1, 'started').save()
 
     response = client.post(
         '/landings/1/update',
@@ -223,7 +226,7 @@ def test_update_landing_bad_api_key(db, client):
 
 
 def test_update_landing_no_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
+    Landing(1, 'D1', 1, 'started').save()
 
     response = client.post(
         '/landings/1/update',

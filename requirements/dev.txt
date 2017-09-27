@@ -60,3 +60,5 @@ dicttoxml==1.7.4 \
 pbr==3.1.1 \
     --hash=sha256:60c25b7dfd054ef9bb0ae327af949dd4676aa09ac3a9471cdc871d8a9213f9ac \
     --hash=sha256:05f61c71aaefc02d8e37c0a3eeb9815ff526ea28b3b76324769e6158d7f95be1
+pytest-sqlalchemy==0.1.1 \
+    --hash=sha256:f42954acc3ffca89434139f20fb1f7dfad2f9fa90fb5e0d6c84df4cf2db27f10
