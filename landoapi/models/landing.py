@@ -45,7 +45,7 @@ class Landing(db.Model):
     diff_id = db.Column(db.Integer)
     status = db.Column(db.String(30))
     error = db.Column(db.String(128), default='')
-    result = db.Column(db.String(128))
+    result = db.Column(db.String(128), default='')
 
     def __init__(
         self,

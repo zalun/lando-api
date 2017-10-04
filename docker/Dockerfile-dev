@@ -5,7 +5,11 @@
 FROM python:3.5-alpine
 
 RUN apk --update --no-cache add \
-	sqlite
+	sqlite \
+	postgresql-dev \
+	gcc \
+	musl-dev
+
 RUN mkdir /db
 
 RUN mkdir /python_requirements
