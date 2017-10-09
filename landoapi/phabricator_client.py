@@ -41,7 +41,7 @@ class PhabricatorClient:
         """
         result = None
         if id:
-            id_num = str(id).strip().replace('D', '')
+            id_num = revision_id_to_int(id)
             result = self._GET('/differential.query', {'ids[]': [id_num]})
         elif phid:
             result = self._GET('/differential.query', {'phids[]': [phid]})
@@ -100,9 +100,9 @@ class PhabricatorClient:
         phid_query_result = self._GET('/phid.query', {'phids[]': [phid]})
         if phid_query_result:
             diff_uri = phid_query_result[phid]['uri']
-            return self._extract_diff_id_from_uri(diff_uri)
-        else:
-            return None
+            return extract_diff_id_from_uri(diff_uri)
+
+        return None
 
     def get_current_user(self):
         """Gets the information of the user making this request.
@@ -175,25 +175,6 @@ class PhabricatorClient:
             logging.debug("error calling 'conduit.ping': %s", exc)
             raise PhabricatorAPIException from exc
 
-    def _extract_diff_id_from_uri(self, uri):
-        """Extract a diff ID from a Diff uri."""
-        # The diff is part of a URI, such as
-        # "https://secure.phabricator.com/differential/diff/43480/".
-        parts = uri.rsplit('/', 4)
-
-        # Check that the URI Path is something we understand.  Fail if the
-        # URI path changed (signalling that the diff id part of the URI may
-        # be in a different segment of the URI string).
-        if parts[1:-2] != ['differential', 'diff']:
-            raise RuntimeError(
-                "Phabricator Diff URI parsing error: The "
-                "URI {} is not in a format we "
-                "understand!".format(uri)
-            )
-
-        # Take the second-last member because of the trailing slash on the URL.
-        return int(parts[-2])
-
     def _request(self, url, data=None, params=None, method='GET'):
         data = data if data else {}
         data['api.token'] = self.api_key
@@ -206,10 +187,9 @@ class PhabricatorClient:
         ).json()
 
         if response['error_code']:
-            exp = PhabricatorAPIException(response.get('error_info'))
-            exp.error_code = response.get('error_code')
-            exp.error_info = response.get('error_info')
-            raise exp
+            raise PhabricatorAPIException(
+                response.get('error_code'), response.get('error_info')
+            )
 
         return response.get('result')
 
@@ -220,7 +200,48 @@ class PhabricatorClient:
         return self._request(url, data, params, 'POST')
 
 
+def revision_id_to_int(revision_id):
+    """Convert revision id to int.
+
+    Revision id might come as a string with a `'D'` in front of the number.
+    123, '123', 'D123' will be returned as 123.
+
+    Args:
+        revision_id: integer or string representing a revision id.
+            In example 123, '123', 'D123'
+
+    Returns:
+        Integer representing the revision id in Phabricator
+    """
+    if isinstance(revision_id, str):
+        return int(revision_id.strip().replace('D', ''))
+    return revision_id
+
+
+def extract_diff_id_from_uri(uri):
+    """Extract a diff ID from a Diff uri."""
+    # The diff is part of a URI, such as
+    # "https://secure.phabricator.com/differential/diff/43480/".
+    parts = uri.rsplit('/', 4)
+
+    # Check that the URI Path is something we understand.  Fail if the
+    # URI path changed (signalling that the diff id part of the URI may
+    # be in a different segment of the URI string).
+    if parts[1:-2] != ['differential', 'diff']:
+        raise RuntimeError(
+            "Phabricator Diff URI parsing error: The "
+            "URI {} is not in a format we "
+            "understand!".format(uri)
+        )
+
+    # Take the second-last member because of the trailing slash on the URL.
+    return int(parts[-2])
+
+
 class PhabricatorAPIException(Exception):
     """An exception class to handle errors from the Phabricator API."""
-    error_code = None
-    error_info = None
+
+    def __init__(self, error_code=None, error_info=None):
+        super().__init__()
+        self.error_code = error_code
+        self.error_info = error_info

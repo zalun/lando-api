@@ -7,6 +7,8 @@ Data factories for writing integration tests.
 import os
 from copy import deepcopy
 
+import requests
+
 from tests.canned_responses.phabricator.diffs import CANNED_DIFF_1
 from tests.canned_responses.phabricator.errors import CANNED_EMPTY_RESULT
 from tests.canned_responses.phabricator.phid_queries import \
@@ -198,6 +200,16 @@ class PhabResponseFactory:
         )
         return rawdiff
 
+    def rawdiff_error(self, diff_id='1', error_code=400, error_info='error'):
+        """Raise PhabricatorAPIException on accessing the rawdiff."""
+        self.mock.get(
+            phab_url('differential.getrawdiff'),
+            status_code=400,
+            json={'error_code': error_code,
+                  'error_info': error_info},
+            additional_matcher=form_matcher('diffID', str(diff_id))
+        )
+
     def repo(self):
         """Return a Phabricator Repo."""
         repo = deepcopy(CANNED_REPO_MOZCENTRAL)
@@ -273,3 +285,16 @@ class TransResponseFactory:
             json={'request_id': request_id},
             status_code=200
         )
+
+    def land_empty_response(self):
+        self.mock.post(trans_url('autoland'), json={}, status_code=200)
+
+    def land_error(self, status_code=400, error='error'):
+        self.mock.post(
+            trans_url('autoland'),
+            json={'error': error},
+            status_code=status_code
+        )
+
+    def land_connection_error(self):
+        self.mock.post(trans_url('autoland'), exc=requests.ConnectionError)

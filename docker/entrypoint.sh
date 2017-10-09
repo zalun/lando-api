@@ -10,7 +10,11 @@ set -ex
 
 case "$1" in
   "upgrade_db")
-      python landoapi/manage.py upgrade
+      TARGET=${2:-heads}
+      python landoapi/manage.py upgrade --target $TARGET
+      ;;
+  "downgrade_db")
+      python landoapi/manage.py downgrade $2
       ;;
   *)
       exec "$@"

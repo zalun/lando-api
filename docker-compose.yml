@@ -21,6 +21,7 @@ services:
       - DATABASE_URL=sqlite:////db/sqlite.db
       - ENV=localdev
       - SENTRY_DSN=
+      # Transplant uses API KEY to identify itself in pingback request
       - TRANSPLANT_API_KEY=set-api-key
       - PINGBACK_ENABLED=y
       - PINGBACK_HOST_URL=https://lando-api.test

@@ -65,18 +65,14 @@ paths:
         - name: status
           in: query
           type: string
+          enum: [started, landed, failed, created]
       responses:
         200:
           description: OK
           schema:
             type: array
-            items: 
+            items:
               $ref: '#/definitions/Landing'
-        404:
-          description: Revision does not exist
-          schema:
-            allOf:
-              - $ref: '#/definitions/Error'
         default:
           description: Unexpected error
           schema:
@@ -84,7 +80,6 @@ paths:
               - $ref: '#/definitions/Error'
 
     post:
-      operationId: landoapi.api.landings.land
       description: |
         Sends request to transplant service and responds just the status code
       parameters:
@@ -136,8 +131,7 @@ paths:
     post:
       operationId: landoapi.api.landings.update
       description: |
-        Sends request to transplant service and responds with just the
-        status code
+        Receive an update of the landing status from Transplant API
       parameters:
         - name: API-Key
           description: A Transplant API key
@@ -153,6 +147,7 @@ paths:
             type: object
             required:
               - request_id
+              - landed
             properties:
               request_id:
                 type: integer

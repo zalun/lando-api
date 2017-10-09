@@ -6,27 +6,33 @@ CANNED_LANDING_LIST_1 = [
     {
         'id': 1,
         'request_id': 1,
-        'revision_id': 'D1',
+        'revision_id': 1,
         'diff_id': 1,
         'status': 'started',
         'error_msg': '',
-        'result': None,
+        'result': '',
+        'created': '2017-09-12T00:00:00',
+        'updated': '2017-09-12T00:00:00'
     }, {
         'id': 2,
         'request_id': 2,
-        'revision_id': 'D1',
+        'revision_id': 1,
         'diff_id': 2,
-        'status': 'finished',
+        'status': 'landed',
         'error_msg': '',
-        'result': None,
+        'result': '',
+        'created': '2017-09-12T00:00:00',
+        'updated': '2017-09-12T00:00:00'
     }, {
         'id': 4,
         'request_id': 4,
-        'revision_id': 'D1',
+        'revision_id': 1,
         'diff_id': 4,
         'status': 'started',
         'error_msg': '',
-        'result': None,
+        'result': '',
+        'created': '2017-09-12T00:00:00',
+        'updated': '2017-09-12T00:00:00'
     }
 ]
 
@@ -34,28 +40,22 @@ CANNED_LANDING_1 = {
     'id': 1,
     'status': 'started',
     'request_id': 1,
-    'revision_id': 'D1',
+    'revision_id': 1,
     'diff_id': 1,
     'error_msg': '',
-    'result': None,
+    'result': '',
+    'created': '2017-09-12T00:00:00',
+    'updated': '2017-09-12T00:00:00'
 }
 
 CANNED_LANDING_FACTORY_1 = {
     'id': 1,
     'status': 'started',
     'request_id': 3,
-    'revision_id': 'D1',
+    'revision_id': 1,
     'diff_id': 2,
     'error_msg': '',
-    'result': None,
-}
-
-CANNED_LANDING_FACTORY_2 = {
-    'id': 2,
-    'status': 'started',
-    'request_id': 2,
-    'revision_id': 'D1',
-    'diff_id': 1,
-    'error_msg': '',
-    'result': None,
+    'result': '',
+    'created': '2017-09-12T00:00:00',
+    'updated': '2017-09-12T00:00:00'
 }

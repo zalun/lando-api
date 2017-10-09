@@ -1,14 +1,17 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+"""Test sending the request to land a patch in Transplant."""
 import json
 import os
 import pytest
 
+from freezegun import freeze_time
 from unittest.mock import MagicMock
 
 from landoapi.hgexportbuilder import build_patch_for_revision
-from landoapi.models.landing import Landing, TRANSPLANT_JOB_LANDED
+from landoapi.models.landing import Landing, STATUS
+from landoapi.models.patch import Patch
 from landoapi.phabricator_client import PhabricatorClient
 from landoapi.transplant_client import TransplantClient
 
@@ -16,6 +19,7 @@ from tests.canned_responses.lando_api.revisions import *
 from tests.canned_responses.lando_api.landings import *
 
 
+@freeze_time('2017-09-12')
 def test_landing_revision_saves_data_in_db(
     db, client, phabfactory, transfactory, s3
 ):
@@ -47,10 +51,85 @@ def test_landing_revision_saves_data_in_db(
 
     # Get Landing object by its id
     landing = Landing.query.get(landing_id)
-    landing.request_id = land_request_id
+    assert landing.request_id == land_request_id
     assert landing.serialize() == CANNED_LANDING_FACTORY_1
 
+    # Get Patch object by its id
+    patch = Patch.query.get(1)
+    assert patch.landing_id == 1
+    assert patch.diff_id == diff_id
 
+
+def test_landing_not_created_if_phabricator_exception(
+    db, client, phabfactory, s3
+):
+    phabfactory.revision()
+    phabfactory.rawdiff_error()
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D1',
+            'diff_id': 1
+        }),
+        content_type='application/json'
+    )
+    assert response.status_code == 502
+    landing = Landing.query.get(1)
+    assert landing is None
+
+
+def test_landing_aborted_if_transplant_exception(
+    db, client, phabfactory, transfactory, s3
+):
+    phabfactory.revision()
+    transfactory.land_connection_error()
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D1',
+            'diff_id': 1
+        }),
+        content_type='application/json'
+    )
+    assert response.status_code == 502
+    landing = Landing.query.get(1)
+    assert landing is None
+
+
+def test_landing_empty_response(db, client, phabfactory, transfactory, s3):
+    phabfactory.revision()
+    transfactory.land_empty_response()
+    phab = PhabricatorClient(api_key='api-key')
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D1',
+            'diff_id': 1
+        }),
+        content_type='application/json'
+    )
+    assert response.status_code == 502
+    landing = Landing.query.get(1)
+    assert landing is None
+
+
+def test_landing_error(db, client, phabfactory, transfactory, s3):
+    phabfactory.revision()
+    transfactory.land_error()
+    response = client.post(
+        '/landings?api_key=api-key',
+        data=json.dumps({
+            'revision_id': 'D1',
+            'diff_id': 1
+        }),
+        content_type='application/json'
+    )
+    assert response.status_code == 502
+    landing = Landing.query.get(1)
+    assert landing is None
+
+
+@freeze_time('2017-09-12')
 def test_landing_revision_calls_transplant_service(
     db, client, phabfactory, monkeypatch, s3
 ):
@@ -64,7 +143,7 @@ def test_landing_revision_calls_transplant_service(
     gitdiff = phabclient.get_rawdiff(diff_id)
     author = phabclient.get_revision_author(revision)
     hgpatch = build_patch_for_revision(gitdiff, author, revision)
-    patch_url = 's3://landoapi.test.bucket/L1_D1_1.patch'
+    patch_url = 's3://landoapi.test.bucket/D1_1_1505174400.patch'
 
     # The repo we expect to see
     repo_uri = phabclient.get_revision_repo(revision)['uri']
@@ -81,16 +160,17 @@ def test_landing_revision_calls_transplant_service(
         content_type='application/json'
     )
     tsclient().land.assert_called_once_with(
-        'ldap_username@example.com', patch_url, repo_uri,
+        'ldap_username@example.com', [patch_url], repo_uri,
         '{}/landings/1/update'.format(os.getenv('PINGBACK_HOST_URL'))
     )
-    body = s3.Object('landoapi.test.bucket',
-                     'L1_D1_1.patch').get()['Body'].read().decode("utf-8")
+    body = s3.Object('landoapi.test.bucket', 'D1_1_1505174400.patch'
+                    ).get()['Body'].read().decode("utf-8")
     assert body == hgpatch
 
 
+@freeze_time('2017-09-12')
 def test_get_transplant_status(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
     response = client.get('/landings/1')
     assert response.status_code == 200
     assert response.content_type == 'application/json'
@@ -127,12 +207,13 @@ def test_land_nonexisting_diff_returns_404(db, client, phabfactory, s3):
     assert response.json == CANNED_LANDO_DIFF_NOT_FOUND
 
 
+@freeze_time('2017-09-12')
 def test_get_jobs(db, client):
-    Landing(1, 'D1', 1, 'started').save()
-    Landing(2, 'D1', 2, 'finished').save()
-    Landing(3, 'D2', 3, 'started').save()
-    Landing(4, 'D1', 4, 'started').save()
-    Landing(5, 'D2', 5, 'finished').save()
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
+    Landing(2, 1, 2, STATUS.TRANSPLANT_JOB_LANDED).save()
+    Landing(3, 2, 3, STATUS.TRANSPLANT_JOB_STARTED).save()
+    Landing(4, 1, 4, STATUS.TRANSPLANT_JOB_STARTED).save()
+    Landing(5, 2, 5, STATUS.TRANSPLANT_JOB_LANDED).save()
 
     response = client.get('/landings')
     assert response.status_code == 200
@@ -143,17 +224,27 @@ def test_get_jobs(db, client):
     assert len(response.json) == 3
     assert response.json == CANNED_LANDING_LIST_1
 
-    response = client.get('/landings?status=finished')
+    response = client.get('/landings?status=landed')
     assert response.status_code == 200
     assert len(response.json) == 2
 
-    response = client.get('/landings?revision_id=D1&status=finished')
+    response = client.get('/landings?revision_id=D1&status=landed')
     assert response.status_code == 200
     assert len(response.json) == 1
 
+    response = client.get('/landings?status=created')
+    assert response.status_code == 200
+    assert len(response.json) == 0
+
+
+def test_get_jobs_wrong_status(db, client):
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
+    response = client.get('/landings?status=nonexisting')
+    assert response.status_code == 400
+
 
 def test_update_landing(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
 
     response = client.post(
         '/landings/1/update',
@@ -168,11 +259,11 @@ def test_update_landing(db, client):
 
     assert response.status_code == 200
     response = client.get('/landings/1')
-    assert response.json['status'] == TRANSPLANT_JOB_LANDED
+    assert response.json['status'] == STATUS.TRANSPLANT_JOB_LANDED.value
 
 
 def test_update_landing_bad_id(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
 
     response = client.post(
         '/landings/2/update',
@@ -188,8 +279,24 @@ def test_update_landing_bad_id(db, client):
     assert response.status_code == 404
 
 
+def test_update_landing_no_request_id(db, client):
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
+
+    response = client.post(
+        '/landings/1/update',
+        data=json.dumps({
+            'landed': True,
+            'result': 'sha123'
+        }),
+        headers=[('API-Key', 'someapikey')],
+        content_type='application/json'
+    )
+
+    assert response.status_code == 400
+
+
 def test_update_landing_bad_request_id(db, client):
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
 
     response = client.post(
         '/landings/1/update',
@@ -206,7 +313,7 @@ def test_update_landing_bad_request_id(db, client):
 
 
 def test_update_landing_bad_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
 
     response = client.post(
         '/landings/1/update',
@@ -223,7 +330,7 @@ def test_update_landing_bad_api_key(db, client):
 
 
 def test_update_landing_no_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
 
     response = client.post(
         '/landings/1/update',
@@ -238,10 +345,58 @@ def test_update_landing_no_api_key(db, client):
     assert response.status_code == 400
 
 
+def test_update_landing_no_landed(db, client):
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
+
+    response = client.post(
+        '/landings/1/update',
+        data=json.dumps({
+            'request_id': 1,
+            'result': 'sha123'
+        }),
+        headers=[('API-Key', 'someapikey')],
+        content_type='application/json'
+    )
+
+    assert response.status_code == 400
+
+
+def test_update_landing_landed_not_bool(db, client):
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
+
+    response = client.post(
+        '/landings/1/update',
+        data=json.dumps({
+            'request_id': 1,
+            'landed': 1,
+            'result': 'sha123'
+        }),
+        headers=[('API-Key', 'someapikey')],
+        content_type='application/json'
+    )
+
+    assert response.status_code == 400
+
+    response = client.post(
+        '/landings/1/update',
+        data=json.dumps(
+            {
+                'request_id': 1,
+                'landed': 'true',
+                'result': 'sha123'
+            }
+        ),
+        headers=[('API-Key', 'someapikey')],
+        content_type='application/json'
+    )
+
+    assert response.status_code == 400
+
+
 def test_pingback_disabled(db, client, monkeypatch):
     monkeypatch.setenv('PINGBACK_ENABLED', 'n')
 
-    Landing(1, 'D1', 1, 'started').save()
+    Landing(1, 1, 1, STATUS.TRANSPLANT_JOB_STARTED).save()
 
     response = client.post(
         '/landings/1/update',

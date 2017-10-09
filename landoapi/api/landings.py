@@ -6,28 +6,29 @@ Landing API
 See the OpenAPI Specification for this API in the spec/swagger.yml file.
 """
 import hmac
-import json
 import logging
 import os
 
 from connexion import problem
 from flask import request
 from sqlalchemy.orm.exc import NoResultFound
-from landoapi.models.landing import (
-    Landing, LandingNotCreatedException, RevisionNotFoundException,
-    TRANSPLANT_JOB_FAILED, TRANSPLANT_JOB_LANDED
-)
+
+from landoapi.models.landing import Landing, RevisionNotFoundException, STATUS
 from landoapi.models.patch import DiffNotFoundException
+from landoapi.phabricator_client import (
+    PhabricatorAPIException, revision_id_to_int
+)
+from landoapi.transplant_client import TransplantAPIException
 
 logger = logging.getLogger(__name__)
 TRANSPLANT_API_KEY = os.getenv('TRANSPLANT_API_KEY')
 
 
-def land(data, api_key=None):
+def post(data, api_key=None):
     """API endpoint at POST /landings to land revision."""
     # get revision_id from body
-    revision_id = data['revision_id']
-    diff_id = data['diff_id']
+    revision_id = revision_id_to_int(data['revision_id'])
+    diff_id = int(data['diff_id'])
     logger.info(
         {
             'path': request.path,
@@ -36,6 +37,7 @@ def land(data, api_key=None):
             'msg': 'landing requested by user'
         }, 'landing.invoke'
     )
+
     try:
         landing = Landing.create(revision_id, diff_id, api_key)
     except RevisionNotFoundException:
@@ -66,8 +68,24 @@ def land(data, api_key=None):
             'The requested diff does not exist',
             type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404'
         )
-    except LandingNotCreatedException as exc:
-        # We could not find a matching revision.
+    except PhabricatorAPIException as exc:
+        # Landing failed - problems with Phabrocator connection
+        logger.info(
+            {
+                'revision': revision_id,
+                'exc': exc,
+                'msg': 'error connecting to Phabricator',
+            }, 'landing.error'
+        )
+        return problem(
+            502,
+            'Landing not created',
+            'Error on connecting to Phabricator.'
+            'Please retry your request at a later time.',
+            type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502'
+        )
+    except TransplantAPIException as exc:
+        # Landing failed - problems with Transplant connection
         logger.info(
             {
                 'revision': revision_id,
@@ -78,7 +96,7 @@ def land(data, api_key=None):
         return problem(
             502,
             'Landing not created',
-            'The requested revision does exist, but landing failed.'
+            'Error on connecting to Transplant.'
             'Please retry your request at a later time.',
             type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/502'
         )
@@ -90,10 +108,10 @@ def get_list(revision_id=None, status=None):
     """API endpoint at GET /landings to return a list of Landing objects."""
     kwargs = {}
     if revision_id:
-        kwargs['revision_id'] = revision_id
+        kwargs['revision_id'] = revision_id_to_int(revision_id)
 
     if status:
-        kwargs['status'] = status
+        kwargs['status'] = STATUS(status)
 
     landings = Landing.query.filter_by(**kwargs).all()
     return list(map(lambda l: l.serialize(), landings)), 200
@@ -127,9 +145,11 @@ def update(landing_id, data):
 
     API-Key header is required to authenticate Transplant API
 
-    data contains following fields:
-        request_id: integer
+    data contains the following fields:
+        request_id: integer (required)
             id of the landing request in Transplant
+        landed: boolean (required)
+            true when operation was successful
         tree: string
             tree name as per treestatus
         rev: string
@@ -138,8 +158,6 @@ def update(landing_id, data):
             full url of destination repo
         trysyntax: string
             change will be pushed to try or empty string
-        landed: boolean;
-            true when operation was successful
         error_msg: string
             error message if landed == false
             empty string if landed == true
@@ -147,10 +165,11 @@ def update(landing_id, data):
             revision (sha) of push if landed == true
             empty string if landed == false
     """
+    # Pingback is disabled on public container
     if os.getenv('PINGBACK_ENABLED', 'n') != 'y':
         logger.warning(
             {
-                'request_id': data.get('request_id', None),
+                'request_id': data['request_id'],
                 'landing_id': landing_id,
                 'remote_addr': request.remote_addr,
                 'msg': 'Attempt to access a disabled pingback',
@@ -163,7 +182,7 @@ def update(landing_id, data):
     ):
         logger.warning(
             {
-                'request_id': data.get('request_id', None),
+                'request_id': data['request_id'],
                 'landing_id': landing_id,
                 'remote_addr': request.remote_addr,
                 'msg': 'Wrong API Key',
@@ -183,9 +202,6 @@ def update(landing_id, data):
             type='https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404'
         )
 
-    landing.error = data.get('error_msg', '')
-    landing.result = data.get('result', '')
-    landing.status = TRANSPLANT_JOB_LANDED if data['landed'
-                                                  ] else TRANSPLANT_JOB_FAILED
-    landing.save()
+    landing.set_status(**data)
+
     return {}, 200
