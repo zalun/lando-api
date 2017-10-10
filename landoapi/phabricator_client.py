@@ -41,7 +41,7 @@ class PhabricatorClient:
         """
         result = None
         if id:
-            id_num = str(id).strip().replace('D', '')
+            id_num = revision_number_to_int(id)
             result = self._GET('/differential.query', {'ids[]': [id_num]})
         elif phid:
             result = self._GET('/differential.query', {'phids[]': [phid]})
@@ -297,3 +297,20 @@ class PhabricatorAPIException(Exception):
     """An exception class to handle errors from the Phabricator API."""
     error_code = None
     error_info = None
+
+
+def revision_number_to_int(revision_id):
+    """Translate Revision ID to int.
+
+    Revision ID in format '1' or 'D1' will be converted to 1.
+
+    Args:
+        revision_id: string in format '{int}' or 'D{int}'
+
+    Returns:
+        integer
+    """
+    if isinstance(revision_id, int):
+        return revision_id
+
+    return revision_id.strip().replace('D', '')

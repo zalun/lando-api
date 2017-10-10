@@ -1,13 +1,14 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-import boto3
 import logging
 import tempfile
 
+import boto3
 from flask import current_app
 
 from landoapi.hgexportbuilder import build_patch_for_revision
+from landoapi.phabricator_client import revision_number_to_int
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,24 @@ class Patch:
         self.diff_id = diff_id
         self.revision = revision
 
+    def check_integrity(self, phab):
+        """Check if diff exists and is assigned to the revision.
+
+        Calls Phabricator to get the diff metadata.
+
+        Raises:
+            DiffNotFoundException
+            DiffNotInRevisionException
+        """
+        diff = phab.get_diff(self.diff_id)
+        if not diff:
+            raise DiffNotFoundException(self.diff_id)
+
+        revision_id = revision_number_to_int(self.revision['id'])
+        diff_revision_id = revision_number_to_int(diff['revisionID'])
+        if revision_id != diff_revision_id:
+            raise DiffNotInRevisionException()
+
     def build(self, phab):
         """Build the patch contents using diff.
 
@@ -41,10 +60,9 @@ class Patch:
             DiffNotFoundException: PhabricatorClient returned no diff for
                 given diff_id
         """
-        diff = phab.get_rawdiff(self.diff_id)
+        self.check_integrity(phab)
 
-        if not diff:
-            raise DiffNotFoundException(self.diff_id)
+        diff = phab.get_rawdiff(self.diff_id)
 
         author = phab.get_revision_author(self.revision)
         return build_patch_for_revision(diff, author, self.revision)
@@ -85,6 +103,11 @@ class Patch:
                 'msg': 'Patch file uploaded'
             }, 'landing.patch_uploaded'
         )
+
+
+class DiffNotInRevisionException(Exception):
+    """The Diff exists, but it does not belong the requested revision."""
+    pass
 
 
 class DiffNotFoundException(Exception):

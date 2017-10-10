@@ -245,6 +245,7 @@ class PhabResponseFactory:
                 based on this.
             patch: The patch file to be used when generating the diff's
                 rawdiff. All diffs must have a corresponding rawdiff.
+            revision_id: ID of the revision to which the diff is assigned.
 
         Returns:
             The full JSON response dict for the generated Diff.
@@ -254,7 +255,11 @@ class PhabResponseFactory:
             diff_id = kwargs['id']
         else:
             diff_id = first_result_in_response(diff)['id']
+
         diff = self._replace_key(diff, 'id', diff_id)
+
+        if 'revision_id' in kwargs:
+            diff['result'][str(diff_id)]['revisionID'] = kwargs['revision_id']
 
         # Create the mock PHID endpoint.
         diff_phid = 'PHID-DIFF-{diff_id}'.format(diff_id=diff_id)

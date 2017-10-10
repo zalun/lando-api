@@ -3,7 +3,7 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import json
 import os
-import pytest
+import pytest  # noqa
 
 from freezegun import freeze_time
 from unittest.mock import MagicMock
@@ -14,8 +14,12 @@ from landoapi.phabricator_client import PhabricatorClient
 from landoapi.transplant_client import TransplantClient
 
 from tests.canned_responses.auth0 import CANNED_USERINFO
-from tests.canned_responses.lando_api.revisions import *
-from tests.canned_responses.lando_api.landings import *
+from tests.canned_responses.lando_api.revisions import (
+    CANNED_LANDO_REVISION_NOT_FOUND, CANNED_LANDO_DIFF_NOT_FOUND
+)
+from tests.canned_responses.lando_api.landings import (
+    CANNED_LANDING_1, CANNED_LANDING_FACTORY_1, CANNED_LANDING_LIST_1
+)
 from tests.utils import phab_url, form_matcher
 
 
@@ -110,6 +114,25 @@ def test_landing_revision_calls_transplant_service(
     body = s3.Object('landoapi.test.bucket',
                      'L1_D1_1.patch').get()['Body'].read().decode("utf-8")
     assert body == hgpatch
+
+
+def test_land_diff_not_in_revision(db, client, phabfactory, s3, auth0_mock):
+    diff_id = 500
+    phabfactory.revision()
+    phabfactory.diff(id=diff_id, revision_id='D123')
+    response = client.post(
+        '/landings',
+        data=json.dumps(
+            {
+                'revision_id': 'D1',
+                'diff_id': diff_id,
+                'force_override_of_diff_id': 1
+            }
+        ),
+        headers=auth0_mock.mock_headers,
+        content_type='application/json'
+    )
+    assert response.status_code == 400
 
 
 @freeze_time('2017-11-02T00:00:00')
@@ -226,7 +249,7 @@ def test_override_inactive_diff(
 def test_override_active_diff(
     db, client, phabfactory, transfactory, s3, auth0_mock
 ):
-    phabfactory.diff(id=1)
+    phabfactory.diff()
     d2 = phabfactory.diff(id=2)
     phabfactory.revision(active_diff=d2)
     transfactory.create_autoland_response()
