@@ -2,7 +2,7 @@
 
 A microservice that turns Phabricator revisions into Mercurial commits.
 
-Part of Mozilla [Conduit](https://wiki.mozilla.org/EngineeringProductivity/Projects/Conduit), 
+Part of Mozilla [Conduit](https://wiki.mozilla.org/EngineeringProductivity/Projects/Conduit),
 our code management microservice ecosystem.
 
 ## Building the service
@@ -15,22 +15,23 @@ our code management microservice ecosystem.
 
 ##### Running the development server
 
-To create a database:
+To create or upgrade the database:
 
 ```bash
 $ invoke upgrade
 ```
 
-To build and start the development services' containers: 
+To build and start the development services' containers:
 
 ```bash
-$ docker-compose up 
+$ docker-compose up
 ```
 
 ##### Accessing the development server
 
 You need to tell docker-compose to map the webservice's exposed port to a port
-on your docker host system.  Create a file named [docker-compose.override.yml](https://docs.docker.com/compose/extends/) 
+on your docker host system.  Create a file named
+[docker-compose.override.yml](https://docs.docker.com/compose/extends/)
 in the project root with these contents:
 
 ```yaml
@@ -52,12 +53,12 @@ Content-Length: 0
 Content-Type: application/json
 Date: Fri, 28 Apr 2017 00:03:10 GMT
 Location: http://localhost:8000/ui/
-Server: Werkzeug/0.12.1 Python/3.5.3 
+Server: Werkzeug/0.12.1 Python/3.5.3
 ```
 
 ## Browsing the API documentation
 
-Start a development server and expose its ports as documented above, and visit 
+Start a development server and expose its ports as documented above, and visit
 `http://localhost:8000/ui/` in your browser to view the API documentation.
 
 ## Testing
@@ -69,3 +70,45 @@ To run the tests please call
 $ invoke test
 ```
 
+## Migrations
+
+#### Developer machines
+
+Add a new migration:
+
+```bash
+$ invoke add-migration {description of applied changes}
+```
+
+Upgrade to a specific target:
+One can find available hashes in migration filenames.
+
+```bash
+$ invoke upgrade --target {hash}
+```
+
+Downgrade:
+
+```bash
+$ invoke downgrade {hash}
+```
+
+#### Deployed server
+
+Upgrade to the newest migration:
+
+```bash
+$ docker run [OPTIONS] IMAGE upgrade_db
+```
+
+Upgrade to a specific target:
+
+```bash
+$ docker run [OPTIONS] IMAGE upgrade_db {hash}
+```
+
+Downgrade:
+
+```bash
+$ docker run [OPTIONS] IMAGE downgrade_db {hash}
+```
