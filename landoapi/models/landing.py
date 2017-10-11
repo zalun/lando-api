@@ -110,7 +110,7 @@ class Landing(db.Model):
         # FIXME: change ldap_username@example.com to the real data retrieved
         #        from Auth0 userinfo
         request_id = trans.land(
-            'ldap_username@example.com', patch.s3_url, repo['uri'], callback
+            'ldap_username@example.com', [patch.s3_url], repo['uri'], callback
         )
         if not request_id:
             raise LandingNotCreatedException

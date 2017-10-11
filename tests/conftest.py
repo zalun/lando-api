@@ -105,11 +105,13 @@ def db(app):
 
 
 @pytest.fixture
-def s3(docker_env_vars):
+def s3(app):
     """Provide s3 mocked connection."""
     bucket = os.getenv('PATCH_BUCKET_NAME')
-    with mock_s3():
-        s3 = boto3.resource('s3')
-        # We need to create the bucket since this is all in Moto's 'virtual' AWS account
-        s3.create_bucket(Bucket=bucket)
-        yield s3
+    with app.app_context():
+        with mock_s3():
+            s3 = boto3.resource('s3')
+            # We need to create the bucket since this is all in Moto's
+            # 'virtual' AWS account
+            s3.create_bucket(Bucket=bucket)
+            yield s3

@@ -81,7 +81,7 @@ def test_landing_revision_calls_transplant_service(
         content_type='application/json'
     )
     tsclient().land.assert_called_once_with(
-        'ldap_username@example.com', patch_url, repo_uri,
+        'ldap_username@example.com', [patch_url], repo_uri,
         '{}/landings/1/update'.format(os.getenv('PINGBACK_HOST_URL'))
     )
     body = s3.Object('landoapi.test.bucket',
@@ -97,7 +97,7 @@ def test_get_transplant_status(db, client):
     assert response.json == CANNED_LANDING_1
 
 
-def test_land_nonexisting_revision_returns_404(db, client, phabfactory, s3):
+def test_land_nonexisting_revision_returns_404(db, client, phabfactory):
     response = client.post(
         '/landings?api_key=api-key',
         data=json.dumps({
@@ -111,7 +111,7 @@ def test_land_nonexisting_revision_returns_404(db, client, phabfactory, s3):
     assert response.json == CANNED_LANDO_REVISION_NOT_FOUND
 
 
-def test_land_nonexisting_diff_returns_404(db, client, phabfactory, s3):
+def test_land_nonexisting_diff_returns_404(db, client, phabfactory):
     phabfactory.user()
     phabfactory.revision()
     response = client.post(
