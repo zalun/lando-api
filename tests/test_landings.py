@@ -97,7 +97,7 @@ def test_get_transplant_status(db, client):
     assert response.json == CANNED_LANDING_1
 
 
-def test_land_nonexisting_revision_returns_404(db, client, phabfactory, s3):
+def test_land_nonexisting_revision_returns_404(client, phabfactory, s3):
     response = client.post(
         '/landings?api_key=api-key',
         data=json.dumps({
@@ -222,9 +222,7 @@ def test_update_landing_bad_api_key(db, client):
     assert response.status_code == 403
 
 
-def test_update_landing_no_api_key(db, client):
-    Landing(1, 'D1', 'started').save()
-
+def test_update_landing_no_api_key(client):
     response = client.post(
         '/landings/1/update',
         data=json.dumps({
@@ -238,10 +236,8 @@ def test_update_landing_no_api_key(db, client):
     assert response.status_code == 400
 
 
-def test_pingback_disabled(db, client, monkeypatch):
+def test_pingback_disabled(client, monkeypatch):
     monkeypatch.setenv('PINGBACK_ENABLED', 'n')
-
-    Landing(1, 'D1', 1, 'started').save()
 
     response = client.post(
         '/landings/1/update',
