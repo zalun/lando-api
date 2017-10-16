@@ -7,23 +7,23 @@ FROM python:3.5-alpine
 MAINTAINER mars@mozilla.com
 # These are unlikely to change from version to version of the container
 EXPOSE 9000
-CMD ["/usr/local/bin/uwsgi"]
 
 RUN addgroup -g 10001 app && adduser -D -u 10001 -G app -h /app app
 
 ENV PYTHONUNBUFFERED=1
 
+CMD ["/usr/local/bin/uwsgi"]
 # uWSGI configuration
 ENV UWSGI_MODULE=landoapi.wsgi:app \
-	UWSGI_SOCKET=:9000 \
-	UWSGI_MASTER=1 \
-	UWSGI_WORKERS=2 \
-	UWSGI_THREADS=8 \
+    UWSGI_SOCKET=:9000 \
+    UWSGI_MASTER=1 \
+    UWSGI_WORKERS=2 \
+    UWSGI_THREADS=8 \
     # Disable worker memory sharing optimizations.  They can cause memory leaks
     # and issues with packages like Sentry.
     # See https://discuss.newrelic.com/t/newrelic-agent-produces-system-error/43446
-	UWSGI_LAZY_APPS=1 \
-	UWSGI_WSGI_ENV_BEHAVIOR=holy \
+    UWSGI_LAZY_APPS=1 \
+    UWSGI_WSGI_ENV_BEHAVIOR=holy \
     # Make uWSGI die instead of reload when it gets SIGTERM (fixed in uWSGI 2.1)
     UWSGI_DIE_ON_TERM=1 \
     # Check that the options we gave uWSGI are sane
@@ -32,7 +32,7 @@ ENV UWSGI_MODULE=landoapi.wsgi:app \
     UWSGI_NEED_APP=1
 
 COPY docker/entrypoint.sh /
-ENTRYPOINT ['/entrypoint.sh']
+ENTRYPOINT ["/entrypoint.sh"]
 
 COPY migrations /migrations
 
@@ -44,22 +44,22 @@ COPY requirements/* /python_requirements/
 # OS package dependencies.
 RUN set -ex \
     && apk add --no-cache --virtual .build-deps \
-           gcc \
-           libc-dev \
-           musl-dev \
-           linux-headers \
-           pcre-dev \
-           postgresql-dev \
+        gcc \
+        libc-dev \
+        musl-dev \
+        linux-headers \
+        pcre-dev \
+        postgresql-dev \
     && pip install --no-cache -r /python_requirements/common.txt \
     && pip install --no-cache -r /python_requirements/production.txt \
-	&& runDeps="$( \
-		scanelf --needed --nobanner --recursive /usr/local \
-			| awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
-			| sort -u \
-			| xargs -r apk info --installed \
-			| sort -u \
-	)" \
-	&& apk add --virtual .python-rundeps $runDeps \
+    && runDeps="$( \
+        scanelf --needed --nobanner --recursive /usr/local \
+            | awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
+            | sort -u \
+            | xargs -r apk info --installed \
+            | sort -u \
+    )" \
+    && apk add --virtual .python-rundeps $runDeps \
     && apk del .build-deps
 
 COPY . /app
