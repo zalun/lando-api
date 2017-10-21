@@ -25,5 +25,11 @@ def upgrade():
     return alembic.upgrade()
 
 
+@manager.command
+def downgrade(hash):
+    """Run all available migration upgrades."""
+    return alembic.downgrade(hash)
+
+
 if __name__ == "__main__":
     manager.run()
