@@ -19,9 +19,11 @@ from landoapi.models.landing import (
     TRANSPLANT_JOB_LANDED
 )
 from landoapi.models.patch import DiffNotFoundException
+from landoapi.pingback import (
+    require_pingback_enabled, require_transplant_api_key
+)
 
 logger = logging.getLogger(__name__)
-TRANSPLANT_API_KEY = os.getenv('TRANSPLANT_API_KEY')
 
 
 def post(data, api_key=None):
@@ -162,6 +164,8 @@ def _not_authorized_problem():
     )
 
 
+@require_pingback_enabled
+@require_transplant_api_key
 def update(data):
     """Update landing on pingback from Transplant.
 
@@ -187,27 +191,6 @@ def update(data):
             revision (sha) of push if landed == true
             empty string if landed == false
     """
-    if os.getenv('PINGBACK_ENABLED', 'n') != 'y':
-        logger.warning(
-            {
-                'data': data,
-                'remote_addr': request.remote_addr,
-                'msg': 'Attempt to access a disabled pingback',
-            }, 'pingback.warning'
-        )
-        return _not_authorized_problem()
-
-    if not hmac.compare_digest(
-        request.headers.get('API-Key', ''), TRANSPLANT_API_KEY
-    ):
-        logger.warning(
-            {
-                'data': data,
-                'remote_addr': request.remote_addr,
-                'msg': 'Wrong API Key',
-            }, 'pingback.error'
-        )
-        return _not_authorized_problem()
 
     try:
         landing = Landing.query.filter_by(request_id=data['request_id']).one()
