@@ -327,6 +327,10 @@ definitions:
           The most recent diff for the revision.
       author:
         $ref: '#/definitions/User'
+      reviewers:
+        type: array
+        items:
+          $ref: '#/definitions/Reviewer'
       repo:
         $ref: '#/definitions/Repo'
       parent_revisions:
@@ -362,6 +366,32 @@ definitions:
         type: string
         description: |
           A url pointing to the user's Phabricator avatar.
+  Reviewer:
+    type: object
+    description: |
+      Representation of the reviewer in the context of a revision.
+    properties:
+      phid:
+        type: string
+        description: |
+          The phid of the user.
+      username:
+        type: string
+        description: |
+          The reviewer's username on Phabricator.
+      status:
+        type: string
+        enum: [added, accepted, rejected, resigned]
+        description: |
+          Status set by the reviewer.
+      real_name:
+        type: string
+        description: |
+          The reviewer's real name as they set it on Phabricator.
+      is_blocking:
+        type: boolean
+        description: |
+          Is the reviewer a blocking one?
   Repo:
     type: object
     properties:
