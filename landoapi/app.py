@@ -38,7 +38,7 @@ def create_app(version_path):
     initialize_sentry(flask_app, this_app_version)
 
     db_uri = flask_app.config.setdefault(
-        'SQLALCHEMY_DATABASE_URI', os.environ.get('DATABASE_URL', 'sqlite://')
+        'SQLALCHEMY_DATABASE_URI', os.environ['DATABASE_URL']
     )
     log_config_change('SQLALCHEMY_DATABASE_URI', db_uri)
 

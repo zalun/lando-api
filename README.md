@@ -77,8 +77,6 @@ Subsets of the tests, e.g. linters, and other commands are also available.  Run
 
 ### Developer machine
 
-> Please run the `lando-api.db` container before accessing the database.
-
 #### Add a new migration:
 
 ```
