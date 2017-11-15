@@ -5,10 +5,9 @@
 FROM python:3.5-alpine
 
 RUN apk --update --no-cache add \
-	gcc \
-	musl-dev \
-	postgresql-dev \
-	sqlite
+    gcc \
+    musl-dev \
+    postgresql-dev
 
 RUN mkdir /db
 
