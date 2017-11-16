@@ -7,6 +7,7 @@ Data factories for writing integration tests.
 import os
 from copy import deepcopy
 
+from landoapi.validation import revision_id_to_int
 from tests.canned_responses.phabricator.diffs import CANNED_DIFF_1
 from tests.canned_responses.phabricator.errors import CANNED_EMPTY_RESULT
 from tests.canned_responses.phabricator.phid_queries import (
@@ -97,10 +98,8 @@ class PhabResponseFactory:
         revision = first_result_in_response(result_json)
 
         if 'id' in kwargs:
-            # Convert 'D000' form to just '000'.
-            str_id = kwargs['id']
-            num_id = str_id[1:]
-            revision['id'] = num_id
+            num_id = revision_id_to_int(kwargs['id'])
+            revision['id'] = str(num_id)
             revision['phid'] = "PHID-DREV-%s" % num_id
 
         if 'author_phid' in kwargs:

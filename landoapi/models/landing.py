@@ -48,7 +48,7 @@ class Landing(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     request_id = db.Column(db.Integer, unique=True)
-    revision_id = db.Column(db.String(30))
+    revision_id = db.Column(db.Integer)
     diff_id = db.Column(db.Integer)
     active_diff_id = db.Column(db.Integer)
     status = db.Column(db.String(30))
@@ -199,7 +199,7 @@ class Landing(db.Model):
         """Serialize to JSON compatible dictionary."""
         return {
             'id': self.id,
-            'revision_id': self.revision_id,
+            'revision_id': 'D{}'.format(self.revision_id),
             'request_id': self.request_id,
             'diff_id': self.diff_id,
             'active_diff_id': self.active_diff_id,
