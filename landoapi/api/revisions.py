@@ -10,6 +10,7 @@ from flask import g
 
 from landoapi.decorators import require_phabricator_api_key
 from landoapi.utils import format_commit_message
+from landoapi.validation import revision_id_to_int
 
 
 @require_phabricator_api_key(optional=True)
@@ -19,6 +20,7 @@ def get(revision_id):
     Returns None or revision.
     """
     phab = g.phabricator
+    revision_id = revision_id_to_int(revision_id)
     revision = phab.get_revision(id=revision_id)
 
     if not revision:

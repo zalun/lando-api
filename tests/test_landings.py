@@ -45,7 +45,7 @@ def test_landing_revision_saves_data_in_db(
     response = client.post(
         '/landings',
         data=json.dumps({
-            'revision_id': 'D1',
+            'revision_id': 1,
             'diff_id': diff_id
         }),
         headers=auth0_mock.mock_headers,
@@ -70,7 +70,7 @@ def test_landing_without_auth0_permissions(
     response = client.post(
         '/landings',
         data=json.dumps({
-            'revision_id': 'D1',
+            'revision_id': 1,
             'diff_id': 1,
         }),
         headers=auth0_mock.mock_headers,
@@ -87,7 +87,7 @@ def test_landing_revision_calls_transplant_service(
 
     # Build the patch we expect to see
     phabclient = PhabricatorClient('someapi')
-    revision = phabclient.get_revision('D1')
+    revision = phabclient.get_revision(1)
     diff_id = phabclient.get_diff(phid=revision['activeDiffPHID'])['id']
     gitdiff = phabclient.get_rawdiff(diff_id)
     author = phabclient.get_revision_author(revision)
@@ -100,7 +100,7 @@ def test_landing_revision_calls_transplant_service(
     client.post(
         '/landings',
         data=json.dumps({
-            'revision_id': 'D1',
+            'revision_id': 1,
             'diff_id': int(diff_id)
         }),
         headers=auth0_mock.mock_headers,
@@ -117,7 +117,7 @@ def test_landing_revision_calls_transplant_service(
 
 @freeze_time('2017-11-02T00:00:00')
 def test_get_transplant_status(db, client):
-    Landing(1, 'D1', 1, active_diff_id=1, status='started').save()
+    Landing(1, 1, 1, active_diff_id=1, status='started').save()
     response = client.get('/landings/1')
     assert response.status_code == 200
     assert response.content_type == 'application/json'
@@ -130,7 +130,7 @@ def test_land_nonexisting_revision_returns_404(
     response = client.post(
         '/landings',
         data=json.dumps({
-            'revision_id': 'D900',
+            'revision_id': 900,
             'diff_id': 1
         }),
         headers=auth0_mock.mock_headers,
@@ -169,7 +169,7 @@ def test_land_nonexisting_diff_returns_404(
     response = client.post(
         '/landings',
         data=json.dumps({
-            'revision_id': 'D1',
+            'revision_id': 1,
             'diff_id': 9000
         }),
         headers=auth0_mock.mock_headers,
@@ -190,7 +190,7 @@ def test_land_inactive_diff_returns_409(
     response = client.post(
         '/landings',
         data=json.dumps({
-            'revision_id': 'D1',
+            'revision_id': 1,
             'diff_id': 1
         }),
         headers=auth0_mock.mock_headers,
@@ -213,7 +213,7 @@ def test_override_inactive_diff(
         '/landings',
         data=json.dumps(
             {
-                'revision_id': 'D1',
+                'revision_id': 1,
                 'diff_id': 1,
                 'force_override_of_diff_id': 2
             }
@@ -237,7 +237,7 @@ def test_override_active_diff(
         '/landings',
         data=json.dumps(
             {
-                'revision_id': 'D1',
+                'revision_id': 1,
                 'diff_id': 1,
                 'force_override_of_diff_id': 2
             }
@@ -255,17 +255,17 @@ def test_override_active_diff(
 
 @freeze_time('2017-11-02T00:00:00')
 def test_get_jobs(db, client):
-    Landing(1, 'D1', 1, active_diff_id=1, status='started').save()
-    Landing(2, 'D1', 2, active_diff_id=2, status='finished').save()
-    Landing(3, 'D2', 3, active_diff_id=3, status='started').save()
-    Landing(4, 'D1', 4, active_diff_id=4, status='started').save()
-    Landing(5, 'D2', 5, active_diff_id=5, status='finished').save()
+    Landing(1, 1, 1, active_diff_id=1, status='started').save()
+    Landing(2, 1, 2, active_diff_id=2, status='finished').save()
+    Landing(3, 2, 3, active_diff_id=3, status='started').save()
+    Landing(4, 1, 4, active_diff_id=4, status='started').save()
+    Landing(5, 2, 5, active_diff_id=5, status='finished').save()
 
     response = client.get('/landings')
     assert response.status_code == 200
     assert len(response.json) == 5
 
-    response = client.get('/landings?revision_id=D1')
+    response = client.get('/landings?revision_id=1')
     assert response.status_code == 200
     assert len(response.json) == 3
     assert response.json == CANNED_LANDING_LIST_1
@@ -274,13 +274,13 @@ def test_get_jobs(db, client):
     assert response.status_code == 200
     assert len(response.json) == 2
 
-    response = client.get('/landings?revision_id=D1&status=finished')
+    response = client.get('/landings?revision_id=1&status=finished')
     assert response.status_code == 200
     assert len(response.json) == 1
 
 
 def test_update_landing(db, client):
-    Landing(1, 'D1', 1, status='started').save()
+    Landing(1, 1, 1, status='started').save()
 
     response = client.post(
         '/landings/update',
@@ -299,7 +299,7 @@ def test_update_landing(db, client):
 
 
 def test_update_landing_bad_request_id(db, client):
-    Landing(1, 'D1', 1, status='started').save()
+    Landing(1, 1, 1, status='started').save()
 
     response = client.post(
         '/landings/update',

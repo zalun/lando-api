@@ -73,7 +73,7 @@ paths:
       parameters:
         - name: revision_id
           in: query
-          type: string
+          type: integer
         - name: status
           in: query
           type: string
@@ -121,7 +121,7 @@ paths:
               - diff_id
             properties:
               revision_id:
-                type: string
+                type: integer
               diff_id:
                 type: integer
               force_override_of_diff_id:
