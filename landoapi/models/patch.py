@@ -135,8 +135,10 @@ class Patch:
             phab.extract_bug_id(self.revision),
             [r['fields']['username'] for r in reviewers if r.get('fields')]
         )
-        return "{title}\n\n{summary}".format(
-            title=title, summary=self.revision['summary']
+        return "{title}\n\n{summary}\n\nDifferential Revision: {url}".format(
+            title=title,
+            summary=self.revision['summary'],
+            url=self.revision['uri']
         )
 
 
