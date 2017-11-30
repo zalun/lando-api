@@ -9,7 +9,7 @@ from connexion import problem
 from flask import g
 
 from landoapi.decorators import require_phabricator_api_key
-from landoapi.utils import format_commit_message_title
+from landoapi.commit_message import format_commit_message
 
 
 @require_phabricator_api_key(optional=True)
@@ -68,9 +68,12 @@ def _format_revision(
     bug_id = phab.extract_bug_id(revision)
     revision_id = int(revision['id'])
     reviewers = _build_reviewers(phab, revision_id)
-    commit_message = format_commit_message_title(
-        revision['title'], bug_id,
-        [r['username'] for r in reviewers if r['username']]
+    commit_message = format_commit_message(
+        revision['title'],
+        bug_id,
+        [r['username'] for r in reviewers if r.get('username')],
+        revision['summary'],
+        revision['uri'],
     )
     diff = _build_diff(phab, revision) if include_diff else None
     author = _build_author(phab, revision, last_author)
