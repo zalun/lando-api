@@ -7,6 +7,8 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+STATUSES_ALLOWED_TO_LAND = ['2', '3', '4']
+
 
 class PhabricatorClient:
     """A class to interface with Phabricator's Conduit API.
@@ -263,6 +265,49 @@ class PhabricatorClient:
         except PhabricatorAPIException:
             return False
         return True
+
+    def get_first_open_parent_revision(self, revision):
+        """Find first open parent revision.
+
+        Args:
+            revision: a Revision dict received via `differential.query` API.
+
+        Returns:
+            Open Revision or None
+        """
+
+        def get_open(phids):
+            """Recursively check the dependency tree for any open revision.
+
+            Return None if phids is an empty list.
+            Request revisions from Phabricator, check if the status
+            is within acceptance list, request dependency tree recursively.
+            If not - return the revision.
+
+            Args:
+                phids: list of PHIDs identifying parent revisions
+
+            Returns:
+                Revision or None
+            """
+            if not phids:
+                return None
+
+            result = self._GET('/differential.query', {'phids[]': phids})
+
+            for revision in result:
+                if revision['status'] not in STATUSES_ALLOWED_TO_LAND:
+                    return revision
+
+                open = get_open(
+                    revision['auxiliary'].get('phabricator:depends-on', [])
+                )
+                if open:
+                    return open
+
+        return get_open(
+            revision['auxiliary'].get('phabricator:depends-on', [])
+        )
 
     @staticmethod
     def extract_bug_id(revision):
