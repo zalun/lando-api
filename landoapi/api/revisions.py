@@ -120,14 +120,13 @@ def _format_revision(
     # that connects the dependent revisions.
     parent_revisions = []
     if include_parents:
-        parent_phids = revision['auxiliary']['phabricator:depends-on']
-        parent_revisions_data = phab.get_revisions(phids=parent_phids)
-        for parent_revision_data in parent_revisions_data:
-            if parent_revision_data:
+        parents = g.phabricator.get_dependency_tree(revision, recursive=False)
+        for parent in parents:
+            if parent:
                 parent_revisions.append(
                     _format_revision(
                         phab,
-                        parent_revision_data,
+                        parent,
                         include_diff=False,
                         include_parents=True,
                         last_author=author,
