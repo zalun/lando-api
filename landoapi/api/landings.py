@@ -312,10 +312,13 @@ def dryrun(data):
 
     Returns a LandingAssessment for the given Revision ID.
     """
-    # TODO unused for now, just parse the data for errors
-    revision_id_to_int(data['revision_id'])
-
     assessment = LandingAssessment([], [])
+
+    id = revision_id_to_int(data['revision_id'])
+    revision = g.phabricator.get_revision(id)
+
+    assessment.run_checks(revision)
+
     return jsonify(assessment.to_dict())
 
 
@@ -395,6 +398,23 @@ class LandingAssessment:
             warnings_dict, sort_keys=True
         ).encode('UTF-8')
         return hashlib.sha256(warnings_json).hexdigest()
+
+    def run_checks(self, revision):
+        self.check_open_parent(revision)
+
+    def check_open_parent(self, revision):
+        open_revision = g.phabricator.get_first_open_parent_revision(revision)
+        if open_revision:
+            message = 'One of the parent revisions (D{}) is open.'.format(
+                open_revision['id']
+            )
+            self.problems.append(
+                {
+                    'id': 'E1',
+                    'open_revision_id': open_revision['id'],
+                    'message': message
+                }
+            )
 
 
 def _not_authorized_problem():

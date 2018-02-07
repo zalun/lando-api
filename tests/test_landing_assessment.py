@@ -168,3 +168,23 @@ def test_hash_object_throws_error():
     a = LandingAssessment([{'id': object()}], None)
     with pytest.raises(TypeError):
         a.hash_warning_list()
+
+
+def test_dryrun_with_open_parent(db, client, phabfactory, auth0_mock):
+    parent_data = phabfactory.revision()
+    phabfactory.revision(id='D2', depends_on=parent_data)
+
+    response = client.post(
+        '/landings/dryrun',
+        data=json_str(revision_id='D2', diff_id=1),
+        headers=auth0_mock.mock_headers,
+        content_type='application/json'
+    )
+
+    assert 200 == response.status_code
+    assert 'application/json' == response.content_type
+    result = response.json
+    assert result['confirmation_token'] is None
+    assert result['warnings'] == []
+    assert result['problems'][0]['id'] == 'E1'
+    assert result['problems'][0]['open_revision_id'] == '1'
